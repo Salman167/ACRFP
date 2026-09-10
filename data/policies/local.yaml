@@ -1,0 +1,48 @@
+# Local / demo policy pack — slightly permissive for learning demos.
+policy_pack: local
+
+base_risk:
+  restart_pod: low
+  apply_hpa: low
+  scale_deployment: low
+  patch_resources: medium
+  rightsize_sku: medium
+  stop_idle_resource: medium
+  drain_node: high
+  delete_workload: high
+  change_network_policy: high
+  delete_namespace: critical
+  delete_resource_group: critical
+  modify_iam: critical
+
+protected_namespaces:
+  - kube-system
+  - kube-public
+  - kube-node-lease
+  - gatekeeper-system
+  - ingress-nginx
+  - cert-manager
+  - monitoring
+  - prod
+  - production
+
+limits:
+  max_auto_scale_replicas: 10
+  max_scale_delta: 5
+
+decisions:
+  auto_execute_low_risk: true
+  require_human_for_medium: true
+  deny_critical_by_default: true
+  # Dual control: HIGH actions need this many distinct human approvers
+  dual_approval_for_high: true
+  high_required_approvals: 2
+  medium_required_approvals: 1
+
+allowed_regions:
+  - local
+  - westeurope
+  - northeurope
+  - uaenorth
+  - uaecentral
+  - qatarcentral

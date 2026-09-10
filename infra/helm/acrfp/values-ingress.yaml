@@ -1,0 +1,26 @@
+# Deploy: helm upgrade --install acrfp infra/helm/acrfp -f infra/helm/acrfp/values-ingress.yaml
+# DNS (GoDaddy): A record  api  ->  nginx LoadBalancer IP
+# (recreate Aug 2026: 20.219.215.219 — always confirm with kubectl get svc -n ingress-nginx)
+
+image:
+  repository: acrfp752f8b6b.azurecr.io/acrfp-api
+  tag: dev
+  pullPolicy: Always
+
+service:
+  api:
+    type: ClusterIP
+
+ingress:
+  enabled: true
+  host: api.acrfp.site
+  clusterIssuer: letsencrypt-prod
+  tls:
+    enabled: true
+    secretName: acrfp-api-tls
+
+# Keep audit trail across pod restarts (Azure Disk CSI)
+persistence:
+  enabled: true
+  size: 1Gi
+  storageClass: managed-csi

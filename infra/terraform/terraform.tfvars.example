@@ -1,0 +1,8 @@
+prefix     = "acrfp"
+location   = "centralindia"
+node_count = 1
+vm_size    = "Standard_B2s_v2"
+
+# Paste your OpenSSH public key (one line from ~/.ssh/id_ed25519_acrfp.pub)
+ssh_public_key = ""
+admin_username = "salmanz"

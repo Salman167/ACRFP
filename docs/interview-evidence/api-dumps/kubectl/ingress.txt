@@ -1,0 +1,2 @@
+﻿NAMESPACE   NAME        CLASS   HOSTS            ADDRESS         PORTS     AGE
+default     acrfp-api   nginx   api.acrfp.site   20.207.74.242   80, 443   18d

@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ACRFP Approval Console</title>
+  <style>
+    :root {
+      --bg: #f4f6f8;
+      --card: #ffffff;
+      --ink: #1a2332;
+      --muted: #5c6b7a;
+      --line: #d8e0e8;
+      --ok: #0f7b4b;
+      --warn: #a15c00;
+      --bad: #b42318;
+      --accent: #0b5fff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.45;
+    }
+    header {
+      background: #102a43;
+      color: #fff;
+      padding: 1rem 1.25rem;
+    }
+    header h1 { margin: 0; font-size: 1.15rem; font-weight: 600; }
+    header p { margin: 0.25rem 0 0; opacity: 0.85; font-size: 0.9rem; }
+    main { max-width: 960px; margin: 0 auto; padding: 1.25rem; }
+    .row { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1rem; }
+    button, .btn {
+      border: 0;
+      border-radius: 6px;
+      padding: 0.55rem 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-ok { background: var(--ok); color: #fff; }
+    .btn-bad { background: var(--bad); color: #fff; }
+    .btn-ghost { background: #e8eef5; color: var(--ink); }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 1rem;
+      margin-bottom: 0.85rem;
+    }
+    .meta { color: var(--muted); font-size: 0.85rem; }
+    .tag {
+      display: inline-block;
+      padding: 0.15rem 0.45rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      background: #e8eef5;
+    }
+    .tag.warn { background: #fff3d6; color: var(--warn); }
+    .tag.ok { background: #e3f6ec; color: var(--ok); }
+    label { display: block; font-size: 0.85rem; margin-bottom: 0.25rem; color: var(--muted); }
+    input {
+      width: 100%;
+      max-width: 280px;
+      padding: 0.5rem 0.65rem;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      margin-bottom: 0.75rem;
+    }
+    .actions { display: flex; gap: 0.5rem; margin-top: 0.75rem; }
+    #status { margin-bottom: 1rem; color: var(--muted); font-size: 0.9rem; }
+    h2 { font-size: 1rem; margin: 1.25rem 0 0.6rem; }
+    a { color: #9ecbff; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>ACRFP Approval Console</h1>
+    <p>Human gate for medium/high risk remediations · <a href="/docs" target="_blank" rel="noreferrer">Swagger docs</a></p>
+  </header>
+  <main>
+    <div class="row">
+      <div>
+        <label for="approver">Your name (approver)</label>
+        <input id="approver" value="alice" />
+      </div>
+      <div style="align-self: end;">
+        <button class="btn-primary" id="refreshBtn" type="button">Refresh</button>
+      </div>
+    </div>
+    <div id="status">Loading…</div>
+
+    <h2>Pending approvals</h2>
+    <div id="pending"></div>
+
+    <h2>Recent incidents</h2>
+    <div id="incidents"></div>
+  </main>
+  <script>
+    const pendingEl = document.getElementById("pending");
+    const incidentsEl = document.getElementById("incidents");
+    const statusEl = document.getElementById("status");
+    const approverEl = document.getElementById("approver");
+
+    async function loadAll() {
+      statusEl.textContent = "Refreshing…";
+      try {
+        const [pending, incidents] = await Promise.all([
+          fetch("/v1/approvals/pending").then((r) => r.json()),
+          fetch("/v1/incidents").then((r) => r.json()),
+        ]);
+        renderPending(pending);
+        renderIncidents(incidents);
+        statusEl.textContent = `Pending: ${pending.length} · Incidents: ${incidents.length} · ${new Date().toLocaleTimeString()}`;
+      } catch (err) {
+        statusEl.textContent = "Failed to load. Is the API running?";
+        console.error(err);
+      }
+    }
+
+    function renderPending(items) {
+      if (!items.length) {
+        pendingEl.innerHTML = '<div class="card meta">No pending approvals. Run the ingest script to create an idle-VM case.</div>';
+        return;
+      }
+      pendingEl.innerHTML = items.map((a) => `
+        <div class="card">
+          <div><span class="tag warn">PENDING</span></div>
+          <p><strong>${a.approval_id}</strong></p>
+          <p class="meta">Incident: ${a.incident_id} · Proposal: ${a.proposal_id}</p>
+          <p class="meta">Risk: ${a.risk_level || "n/a"} · Need approvals: ${a.required_approvals || 1}
+            · Collected: ${(a.decisions || []).filter(d => d.decision === "approved").length}</p>
+          <div class="actions">
+            <button class="btn-ok" type="button" onclick="decide('${a.approval_id}', 'approved')">Approve</button>
+            <button class="btn-bad" type="button" onclick="decide('${a.approval_id}', 'rejected')">Reject</button>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    function renderIncidents(items) {
+      if (!items.length) {
+        incidentsEl.innerHTML = '<div class="card meta">No incidents yet.</div>';
+        return;
+      }
+      incidentsEl.innerHTML = items.slice(0, 8).map((c) => `
+        <div class="card">
+          <div><span class="tag ${c.status === 'awaiting_approval' ? 'warn' : 'ok'}">${c.status}</span></div>
+          <p><strong>${c.event?.title || c.incident_id}</strong></p>
+          <p class="meta">${c.incident_id} · ${c.event?.event_type || ""} · ${c.event?.resource || ""}</p>
+          <p class="meta">Proposals: ${(c.proposals || []).length} · Verdicts: ${(c.verdicts || []).length} · Executions: ${(c.executions || []).length}</p>
+        </div>
+      `).join("");
+    }
+
+    async function decide(approvalId, decision) {
+      const decided_by = (approverEl.value || "human").trim();
+      const res = await fetch(`/v1/approvals/${approvalId}/decide`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision, decided_by, comment: "from approval console" }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert("Failed: " + (err.detail || res.status));
+      }
+      await loadAll();
+    }
+
+    document.getElementById("refreshBtn").addEventListener("click", loadAll);
+    loadAll();
+    setInterval(loadAll, 8000);
+  </script>
+</body>
+</html>

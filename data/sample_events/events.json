@@ -1,0 +1,75 @@
+[
+  {
+    "event_type": "reliability",
+    "source": "mock-metrics",
+    "cluster": "local-dev",
+    "region": "local",
+    "namespace": "payments",
+    "resource": "payments-api",
+    "severity": "critical",
+    "title": "payments-api restart storm",
+    "description": "Deployment payments-api exceeded 8 restarts in 10 minutes with elevated memory.",
+    "metrics": {
+      "restarts": 9,
+      "memory_pct": 93,
+      "cpu_pct": 55,
+      "replicas": 3
+    }
+  },
+  {
+    "event_type": "cost",
+    "source": "mock-cost",
+    "cluster": "local-dev",
+    "region": "local",
+    "namespace": "batch",
+    "resource": "etl-worker-vm",
+    "severity": "warning",
+    "title": "Idle VM spend anomaly",
+    "description": "etl-worker-vm shows near-zero CPU for 5 days while still billed.",
+    "cost_signal": {
+      "baseline_daily_usd": 40,
+      "actual_daily_usd": 42,
+      "idle_resource": true,
+      "idle_monthly_usd": 380,
+      "sku": "Standard_D4s_v5",
+      "resource_id": "/subscriptions/demo/resourceGroups/rg-batch/providers/Microsoft.Compute/virtualMachines/etl-worker-vm"
+    }
+  },
+  {
+    "event_type": "mixed",
+    "source": "mock-mixed",
+    "cluster": "local-dev",
+    "region": "local",
+    "namespace": "checkout",
+    "resource": "checkout-svc",
+    "severity": "warning",
+    "title": "checkout latency + spend spike",
+    "description": "p95 latency up and daily compute cost up 60% after traffic surge.",
+    "metrics": {
+      "cpu_pct": 96,
+      "replicas": 2,
+      "restarts": 1
+    },
+    "cost_signal": {
+      "baseline_daily_usd": 100,
+      "actual_daily_usd": 165
+    }
+  },
+  {
+    "event_type": "reliability",
+    "source": "mock-metrics",
+    "cluster": "local-dev",
+    "region": "local",
+    "namespace": "kube-system",
+    "resource": "coredns",
+    "severity": "critical",
+    "title": "coredns restart in protected namespace",
+    "description": "CoreDNS pods restarting — protected namespace should force HIGH risk and dual approval.",
+    "metrics": {
+      "restarts": 6,
+      "memory_pct": 70,
+      "cpu_pct": 40,
+      "replicas": 2
+    }
+  }
+]

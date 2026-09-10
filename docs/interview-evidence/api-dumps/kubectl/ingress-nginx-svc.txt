@@ -1,0 +1,3 @@
+﻿NAME                                 TYPE           CLUSTER-IP    EXTERNAL-IP     PORT(S)                      AGE
+ingress-nginx-controller             LoadBalancer   10.0.84.35    20.207.74.242   80:30512/TCP,443:32705/TCP   18d
+ingress-nginx-controller-admission   ClusterIP      10.0.87.131   <none>          443/TCP                      18d

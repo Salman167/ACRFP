@@ -1,0 +1,27 @@
+# Requires: nginx-ingress + cert-manager + ClusterIssuer (scripts/install_aks_platform.ps1)
+# DNS (GoDaddy acrfp.site): A record  api  ->  nginx LoadBalancer IP
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: acrfp-api
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - api.acrfp.site
+      secretName: acrfp-api-tls
+  rules:
+    - host: api.acrfp.site
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: acrfp-api
+                port:
+                  number: 80

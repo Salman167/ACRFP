@@ -1,0 +1,36 @@
+.env
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+dist/
+build/
+*.log
+.DS_Store
+.idea/
+.vscode/
+.cursor/
+data/runtime/
+*.sqlite3
+infra/terraform/.terraform/
+infra/terraform/*.tfstate
+infra/terraform/*.tfstate.*
+infra/terraform/.terraform.lock.hcl
+infra/terraform/tfplan*
+infra/terraform/*.tfplan
+infra/k8s-rendered/
+# Local overrides (SSH keys / machine-specific); commit terraform.tfvars.example instead
+infra/terraform/terraform.tfvars
+
+# Local env / secrets
+.env.*
+!.env.example
+
+# Word/Office lock files
+~$*.docx
+~$*.doc
+docs/resume/~$*

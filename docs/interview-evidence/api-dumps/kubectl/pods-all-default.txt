@@ -1,0 +1,8 @@
+﻿NAME                               READY   STATUS                   RESTARTS   AGE   IP             NODE                                NOMINATED NODE   READINESS GATES
+acrfp-api-774f5bf767-btlcv         1/1     Running                  0          47m   10.244.0.188   aks-nodepool1-33384743-vmss000001   <none>           <none>
+acrfp-executor-74496596df-5td2n    0/1     Completed                0          18d   10.244.0.220   aks-nodepool1-33384743-vmss000001   <none>           <none>
+acrfp-executor-74496596df-pggf7    1/1     Running                  0          47m   10.244.0.144   aks-nodepool1-33384743-vmss000001   <none>           <none>
+acrfp-guardrail-5f4c6b7c86-flsqz   0/1     ContainerStatusUnknown   1          18d   10.244.0.119   aks-nodepool1-33384743-vmss000001   <none>           <none>
+acrfp-guardrail-5f4c6b7c86-pgx62   1/1     Running                  0          47m   10.244.0.127   aks-nodepool1-33384743-vmss000001   <none>           <none>
+acrfp-guardrail-5f4c6b7c86-q4sk8   1/1     Running                  0          47m   10.244.0.112   aks-nodepool1-33384743-vmss000001   <none>           <none>
+acrfp-guardrail-5f4c6b7c86-v2cgs   0/1     Completed                0          18d   10.244.0.60    aks-nodepool1-33384743-vmss000001   <none>           <none>

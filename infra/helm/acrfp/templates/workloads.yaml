@@ -1,0 +1,151 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: acrfp-api
+  labels:
+    app: acrfp-api
+spec:
+  replicas: {{ .Values.api.replicas }}
+  selector:
+    matchLabels:
+      app: acrfp-api
+  template:
+    metadata:
+      labels:
+        app: acrfp-api
+    spec:
+      securityContext:
+        fsGroup: 65532
+      containers:
+        - name: api
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 8000
+          env:
+            - name: PYTHONPATH
+              value: /usr/local/lib/python3.11/site-packages:/app/src
+            - name: GUARDRAIL_URL
+              value: http://acrfp-guardrail:8001
+            - name: EXECUTOR_URL
+              value: http://acrfp-executor:8002
+            - name: LLM_PROVIDER
+              value: {{ .Values.llmProvider | quote }}
+            - name: ACRFP_MODE
+              value: {{ .Values.mode | quote }}
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+          volumeMounts:
+            # Distroless non-root needs a writable mount for audit.jsonl
+            - name: runtime-data
+              mountPath: /app/data/runtime
+      volumes:
+        - name: runtime-data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: acrfp-api-runtime
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: acrfp-api
+spec:
+  type: {{ .Values.service.api.type }}
+  selector:
+    app: acrfp-api
+  ports:
+    - port: {{ .Values.service.api.port }}
+      targetPort: {{ .Values.service.api.targetPort }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: acrfp-guardrail
+  labels:
+    app: acrfp-guardrail
+spec:
+  replicas: {{ .Values.guardrailService.replicas }}
+  selector:
+    matchLabels:
+      app: acrfp-guardrail
+  template:
+    metadata:
+      labels:
+        app: acrfp-guardrail
+    spec:
+      containers:
+        - name: guardrail
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["python3", "-m", "uvicorn", "guardrail.app:app", "--host", "0.0.0.0", "--port", "8001"]
+          ports:
+            - containerPort: 8001
+          env:
+            - name: PYTHONPATH
+              value: /usr/local/lib/python3.11/site-packages:/app/src
+            - name: DENY_CRITICAL_BY_DEFAULT
+              value: {{ .Values.guardrail.denyCriticalByDefault | quote }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: acrfp-guardrail
+spec:
+  type: {{ .Values.service.guardrail.type }}
+  selector:
+    app: acrfp-guardrail
+  ports:
+    - port: {{ .Values.service.guardrail.port }}
+      targetPort: {{ .Values.service.guardrail.targetPort }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: acrfp-executor
+  labels:
+    app: acrfp-executor
+spec:
+  replicas: {{ .Values.executor.replicas }}
+  selector:
+    matchLabels:
+      app: acrfp-executor
+  template:
+    metadata:
+      labels:
+        app: acrfp-executor
+    spec:
+      serviceAccountName: acrfp-executor
+      containers:
+        - name: executor
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["python3", "-m", "uvicorn", "executor.app:app", "--host", "0.0.0.0", "--port", "8002"]
+          ports:
+            - containerPort: 8002
+          env:
+            - name: PYTHONPATH
+              value: /usr/local/lib/python3.11/site-packages:/app/src
+            - name: ACRFP_MODE
+              value: {{ .Values.mode | quote }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: acrfp-executor
+spec:
+  type: {{ .Values.service.executor.type }}
+  selector:
+    app: acrfp-executor
+  ports:
+    - port: {{ .Values.service.executor.port }}
+      targetPort: {{ .Values.service.executor.targetPort }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: acrfp-executor

@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ACRFP — Interview Demo Evidence Pack</title>
+  <style>
+    :root {
+      --ink: #0f172a;
+      --muted: #475569;
+      --line: #e2e8f0;
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --accent: #0e7490;
+      --ok: #047857;
+      --warn: #b45309;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Calibri, system-ui, sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+      line-height: 1.5;
+    }
+    header {
+      background: linear-gradient(135deg, #0f172a 0%, #164e63 100%);
+      color: #fff;
+      padding: 2.2rem 1.5rem 2rem;
+    }
+    header .wrap, main, footer .wrap { max-width: 980px; margin: 0 auto; }
+    h1 { margin: 0 0 0.35rem; font-size: 1.85rem; letter-spacing: -0.02em; }
+    .tagline { margin: 0; opacity: 0.92; max-width: 42rem; }
+    .meta {
+      display: flex; flex-wrap: wrap; gap: 0.5rem 1rem;
+      margin-top: 1rem; font-size: 0.92rem; opacity: 0.95;
+    }
+    .badge {
+      display: inline-block; background: rgba(255,255,255,0.14);
+      border: 1px solid rgba(255,255,255,0.22); border-radius: 999px;
+      padding: 0.2rem 0.7rem;
+    }
+    nav.toc {
+      background: var(--card); border-bottom: 1px solid var(--line);
+      position: sticky; top: 0; z-index: 5;
+    }
+    nav.toc .wrap {
+      max-width: 980px; margin: 0 auto; padding: 0.65rem 1.5rem;
+      display: flex; flex-wrap: wrap; gap: 0.75rem 1.1rem; font-size: 0.9rem;
+    }
+    nav.toc a { color: var(--accent); text-decoration: none; font-weight: 600; }
+    nav.toc a:hover { text-decoration: underline; }
+    main { padding: 1.5rem; }
+    section {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 1.25rem 1.35rem 1.4rem;
+      margin-bottom: 1.15rem;
+    }
+    h2 { margin: 0 0 0.6rem; font-size: 1.25rem; color: #0f172a; }
+    h3 { margin: 1rem 0 0.4rem; font-size: 1.05rem; }
+    p, li { color: var(--ink); }
+    .muted { color: var(--muted); }
+    .say {
+      background: #ecfeff; border-left: 4px solid var(--accent);
+      padding: 0.75rem 0.9rem; margin: 0.75rem 0; border-radius: 0 8px 8px 0;
+    }
+    .say strong { color: #155e75; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+    th, td { border: 1px solid var(--line); padding: 0.5rem 0.6rem; text-align: left; vertical-align: top; }
+    th { background: #f1f5f9; }
+    .shot {
+      margin: 0.75rem 0 0.25rem;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #0b1220;
+    }
+    .shot img {
+      display: block; width: 100%; height: auto; background: #fff;
+    }
+    .caption { font-size: 0.88rem; color: var(--muted); margin: 0.35rem 0 0.8rem; }
+    .missing {
+      padding: 2rem 1rem; text-align: center; color: #94a3b8; background: #0f172a;
+      font-size: 0.95rem;
+    }
+    pre {
+      background: #0f172a; color: #e2e8f0; padding: 0.85rem 1rem;
+      border-radius: 8px; overflow: auto; font-size: 0.82rem; line-height: 1.4;
+      max-height: 320px;
+    }
+    .status-ok { color: var(--ok); font-weight: 700; }
+    .status-warn { color: var(--warn); font-weight: 700; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.9rem; }
+    @media (max-width: 800px) { .grid2 { grid-template-columns: 1fr; } }
+    footer {
+      padding: 1.5rem; color: var(--muted); font-size: 0.9rem; text-align: center;
+    }
+    code { font-family: Consolas, "Courier New", monospace; font-size: 0.9em; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h1>ACRFP — End-to-End Interview Evidence</h1>
+      <p class="tagline">
+        Agentic Cloud Reliability &amp; FinOps Platform — proof that the system was built,
+        deployed to AKS with public HTTPS, and exercised end-to-end (ingest → agents → guardrail → approval / dry-run → audit).
+      </p>
+      <div class="meta">
+        <span class="badge">Candidate: Zaid Salman</span>
+        <span class="badge">Live URL (when AKS running): api.acrfp.site</span>
+        <span class="badge">Mode: dry-run + human approval</span>
+        <span class="badge">LLM: mock (Foundry next)</span>
+      </div>
+    </div>
+  </header>
+
+  <nav class="toc">
+    <div class="wrap">
+      <a href="#story">1. Story</a>
+      <a href="#arch">2. Architecture</a>
+      <a href="#proof">3. Live proof</a>
+      <a href="#e2e">4. E2E walkthrough</a>
+      <a href="#risk">5. Risk decisions</a>
+      <a href="#infra">6. Infra</a>
+      <a href="#honest">7. Honest scope</a>
+    </div>
+  </nav>
+
+  <main>
+    <section id="story">
+      <h2>1. One-minute story (say this)</h2>
+      <div class="say">
+        <strong>What I built:</strong>
+        A multi-agent reliability + FinOps API on Azure Kubernetes. Alerts come in, LangGraph agents propose diagnosis / cost / remediation,
+        a <em>policy guardrail</em> decides allow / require human approval / deny, and only then a dry-run executor runs.
+        High-risk actions never auto-execute — they wait in <code>/ui</code>. Everything is audited.
+      </div>
+      <p class="muted">
+        This HTML file works <strong>offline</strong>. Screenshots and JSON below were captured from the real deployment at
+        <code>https://api.acrfp.site</code>. The AKS cluster may be stopped to save cost — the evidence remains.
+      </p>
+    </section>
+
+    <section id="arch">
+      <h2>2. Architecture (show these diagrams)</h2>
+      <h3>Platform flow</h3>
+      <div class="shot">
+        <img src="../images/acrfp-architecture.png" alt="ACRFP architecture diagram" />
+      </div>
+      <p class="caption">Figure A — Alert → API → Diagnosis/Cost/Remediation agents → Guardrail → Executor or /ui → Audit.</p>
+
+      <h3>Frontend vs backend</h3>
+      <div class="shot">
+        <img src="../images/acrfp-frontend-backend.png" alt="Frontend vs backend" />
+      </div>
+      <p class="caption">Figure B — Same FastAPI backend powers Swagger <code>/docs</code> and the approval UI <code>/ui</code>.</p>
+
+      <div class="say">
+        <strong>Interview point:</strong> Agents never call kubectl/ARM directly. Risk comes from action type + parameters in the guardrail, not from the LLM “rating itself”.
+      </div>
+    </section>
+
+    <section id="proof">
+      <h2>3. Live deployment proof</h2>
+      <table>
+        <thead>
+          <tr><th>Check</th><th>What interviewer should see</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Public HTTPS</td>
+            <td><code>https://api.acrfp.site/health</code> with Let’s Encrypt cert</td>
+            <td class="status-ok">Done</td>
+          </tr>
+          <tr>
+            <td>Ingress + DNS</td>
+            <td>GoDaddy <code>api.acrfp.site</code> → nginx Ingress LB on AKS</td>
+            <td class="status-ok">Done</td>
+          </tr>
+          <tr>
+            <td>Approval UI</td>
+            <td><code>/ui</code> dual-approve for high-risk remediations</td>
+            <td class="status-ok">Done</td>
+          </tr>
+          <tr>
+            <td>Audit trail</td>
+            <td><code>/v1/audit</code> shows ingest → decision → dry-run / approval</td>
+            <td class="status-ok">Done</td>
+          </tr>
+          <tr>
+            <td>Azure AI Foundry LLM</td>
+            <td>Config ready; switch <code>LLM_PROVIDER=azure_foundry</code></td>
+            <td class="status-warn">Next</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Screenshot — Health</h3>
+      <div class="shot" id="shot-health">
+        <img src="screenshots/01-health.png" alt="Health endpoint screenshot"
+             onerror="this.parentElement.innerHTML='<div class=missing>Missing screenshots/01-health.png — run scripts/capture_interview_evidence.ps1 while AKS is up</div>'" />
+      </div>
+      <p class="caption">Figure 1 — Cluster-served health JSON over HTTPS (not local uvicorn).</p>
+
+      <h3>Screenshot — Swagger /docs</h3>
+      <div class="shot">
+        <img src="screenshots/02-swagger-docs.png" alt="Swagger docs screenshot"
+             onerror="this.parentElement.innerHTML='<div class=missing>Missing screenshots/02-swagger-docs.png — run capture script</div>'" />
+      </div>
+      <p class="caption">Figure 2 — OpenAPI surface: ingest, incidents, approvals, audit.</p>
+
+      <h3>Screenshot — Approval UI</h3>
+      <div class="shot">
+        <img src="screenshots/03-approval-ui.png" alt="Approval UI screenshot"
+             onerror="this.parentElement.innerHTML='<div class=missing>Missing screenshots/03-approval-ui.png — run capture script</div>'" />
+      </div>
+      <p class="caption">Figure 3 — Human-in-the-loop queue for high-risk actions.</p>
+    </section>
+
+    <section id="e2e">
+      <h2>4. End-to-end walkthrough (what I actually ran)</h2>
+      <ol>
+        <li><strong>Ingest samples</strong> — CoreDNS CrashLoop (HIGH), Idle VM waste (MEDIUM), low-risk path.</li>
+        <li><strong>Agents</strong> — Diagnosis / Cost / Remediation produce structured proposals.</li>
+        <li><strong>Guardrail</strong> — HIGH remediation → <code>require_approval</code>; low-risk → <code>allow</code> + dry-run.</li>
+        <li><strong>Human</strong> — Approve twice in <code>/ui</code> (dual control) for production-like safety.</li>
+        <li><strong>Audit</strong> — Every step recorded for compliance storytelling.</li>
+      </ol>
+
+      <h3>Sample health response (captured)</h3>
+      <pre id="dump-health">Loading api-dumps/01-health.json…</pre>
+
+      <h3>Incidents after ingest (captured)</h3>
+      <pre id="dump-incidents">Loading api-dumps/02-incidents.json…</pre>
+
+      <h3>Audit trail excerpt (captured)</h3>
+      <pre id="dump-audit">Loading api-dumps/03-audit.json…</pre>
+
+      <div class="say">
+        <strong>Say this:</strong>
+        “I deliberately keep execution in dry-run for the portfolio stage. The control plane (policy + approval + audit) is the hard part for enterprise Azure roles — live kubectl can be flipped when governance is ready.”
+      </div>
+    </section>
+
+    <section id="risk">
+      <h2>5. Risk decision matrix (memorize)</h2>
+      <table>
+        <thead>
+          <tr><th>Scenario</th><th>Guardrail</th><th>What happens</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>CoreDNS / cluster-critical remediation</td>
+            <td><code>require_approval</code></td>
+            <td>Queued in <code>/ui</code>; dual approval; then dry-run</td>
+          </tr>
+          <tr>
+            <td>Idle VM cost recommendation</td>
+            <td>Policy by action risk</td>
+            <td>Cost agent surfaces waste; remediations gated</td>
+          </tr>
+          <tr>
+            <td>Low-risk / allowlisted action</td>
+            <td><code>allow</code></td>
+            <td>Auto dry-run via executor; audited</td>
+          </tr>
+          <tr>
+            <td>Denied / out-of-policy</td>
+            <td><code>deny</code></td>
+            <td>Blocked; never reaches executor</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="infra">
+      <h2>6. Azure / platform stack I operated</h2>
+      <div class="grid2">
+        <div>
+          <ul>
+            <li>Terraform → Resource Group + AKS + ACR</li>
+            <li>Helm chart for ACRFP services</li>
+            <li>nginx Ingress Controller</li>
+            <li>cert-manager + Let’s Encrypt (prod)</li>
+            <li>DNS: GoDaddy <code>acrfp.site</code></li>
+            <li>Argo CD installed (GitOps app scaffold)</li>
+          </ul>
+        </div>
+        <div>
+          <h3>kubectl evidence (if captured)</h3>
+          <pre id="dump-pods">pods.txt not captured yet</pre>
+          <pre id="dump-ingress">ingress.txt not captured yet</pre>
+        </div>
+      </div>
+      <p class="muted">Full command history + issues/fixes: <code>docs/project-journey-runbook.md</code></p>
+    </section>
+
+    <section id="honest">
+      <h2>7. Honest scope (builds trust)</h2>
+      <table>
+        <thead><tr><th>Done</th><th>Not claimed / next</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Multi-agent LangGraph orchestration on FastAPI</td>
+            <td>Live Azure/kubectl mutation (dry-run only today)</td>
+          </tr>
+          <tr>
+            <td>AKS public HTTPS with real domain + TLS</td>
+            <td>Azure AI Foundry as production LLM (config ready)</td>
+          </tr>
+          <tr>
+            <td>Guardrail + dual approval UI + audit</td>
+            <td>Event Hubs / Cost Management API streaming (roadmap)</td>
+          </tr>
+          <tr>
+            <td>Helm + platform add-ons (ingress, cert-manager, Argo CD)</td>
+            <td>Argo CD fully pointed at private Git repoURL</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="say">
+        <strong>Closing line:</strong>
+        “I can restart the AKS demo in minutes if you want a live click-through; otherwise this pack is the recorded proof of an end-to-end Azure agentic control plane.”
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      ACRFP Interview Evidence Pack · regenerate screenshots with
+      <code>.\scripts\capture_interview_evidence.ps1</code>
+      · open this file from disk (Chrome / Edge)
+    </div>
+  </footer>
+
+  <script>
+    async function loadText(path, elId, fallback) {
+      const el = document.getElementById(elId);
+      if (!el) return;
+      try {
+        const res = await fetch(path);
+        if (!res.ok) throw new Error(String(res.status));
+        let text = await res.text();
+        try {
+          text = JSON.stringify(JSON.parse(text), null, 2);
+        } catch (_) { /* keep raw */ }
+        el.textContent = text.slice(0, 12000) || fallback;
+      } catch (e) {
+        el.textContent = fallback;
+      }
+    }
+    loadText("api-dumps/01-health.json", "dump-health",
+      '{\n  "status": "ok",\n  "note": "Run capture script to embed live JSON"\n}');
+    loadText("api-dumps/02-incidents.json", "dump-incidents",
+      "Run scripts/capture_interview_evidence.ps1 while https://api.acrfp.site is up.");
+    loadText("api-dumps/03-audit.json", "dump-audit",
+      "Run capture script to embed /v1/audit output.");
+    loadText("api-dumps/kubectl/pods.txt", "dump-pods", "kubectl pods not captured yet");
+    loadText("api-dumps/kubectl/ingress.txt", "dump-ingress", "kubectl ingress not captured yet");
+  </script>
+</body>
+</html>
