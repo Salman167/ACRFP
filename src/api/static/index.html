@@ -90,9 +90,13 @@
       </div>
       <div style="align-self: end;">
         <button class="btn-primary" id="refreshBtn" type="button">Refresh</button>
+        <button class="btn-ghost" id="evalBtn" type="button">Run evals</button>
       </div>
     </div>
     <div id="status">Loading…</div>
+
+    <h2>Golden-set evals</h2>
+    <div id="evals"></div>
 
     <h2>Pending approvals</h2>
     <div id="pending"></div>
@@ -103,18 +107,21 @@
   <script>
     const pendingEl = document.getElementById("pending");
     const incidentsEl = document.getElementById("incidents");
+    const evalsEl = document.getElementById("evals");
     const statusEl = document.getElementById("status");
     const approverEl = document.getElementById("approver");
 
     async function loadAll() {
       statusEl.textContent = "Refreshing…";
       try {
-        const [pending, incidents] = await Promise.all([
+        const [pending, incidents, evals] = await Promise.all([
           fetch("/v1/approvals/pending").then((r) => r.json()),
           fetch("/v1/incidents").then((r) => r.json()),
+          fetch("/v1/evals").then((r) => r.json()),
         ]);
         renderPending(pending);
         renderIncidents(incidents);
+        renderEvals(evals);
         statusEl.textContent = `Pending: ${pending.length} · Incidents: ${incidents.length} · ${new Date().toLocaleTimeString()}`;
       } catch (err) {
         statusEl.textContent = "Failed to load. Is the API running?";
@@ -140,6 +147,23 @@
           </div>
         </div>
       `).join("");
+    }
+
+    function renderEvals(report) {
+      if (!report || report.ran === false) {
+        evalsEl.innerHTML = '<div class="card meta">No eval run yet. Click <strong>Run evals</strong> to score the golden incidents (routing, proposals, guardrail).</div>';
+        return;
+      }
+      const tag = report.passed ? "ok" : "warn";
+      const rows = (report.cases || []).map((c) =>
+        `<p class="meta">${c.passed ? "PASS" : "FAIL"} · <strong>${c.id}</strong> · ${c.checks_passed}/${c.checks_total} checks · ${c.decisions.join(", ")}</p>`
+      ).join("");
+      evalsEl.innerHTML = `
+        <div class="card">
+          <div><span class="tag ${tag}">${report.passed ? "SUITE PASS" : "SUITE FAIL"}</span></div>
+          <p>Score <strong>${report.score}</strong> · ${report.cases_passed}/${report.cases_total} cases · provider=${report.llm_provider}</p>
+          ${rows}
+        </div>`;
     }
 
     function renderIncidents(items) {
@@ -171,6 +195,17 @@
       await loadAll();
     }
 
+    document.getElementById("evalBtn").addEventListener("click", async () => {
+      statusEl.textContent = "Running golden-set evals…";
+      try {
+        const report = await fetch("/v1/evals/run", { method: "POST" }).then((r) => r.json());
+        renderEvals(report);
+        statusEl.textContent = `Evals ${report.passed ? "passed" : "failed"} · score=${report.score}`;
+      } catch (err) {
+        statusEl.textContent = "Eval run failed.";
+        console.error(err);
+      }
+    });
     document.getElementById("refreshBtn").addEventListener("click", loadAll);
     loadAll();
     setInterval(loadAll, 8000);

@@ -59,7 +59,9 @@ Event (mock / Event Hubs)
 | `scripts/capture_interview_evidence.ps1` | Capture live screenshots/API dumps before stopping AKS |
 | `scripts/terraform_apply.ps1` | Create Azure infra |
 | `scripts/week3_aks_deploy.ps1` | Build image in ACR + kubectl apply |
-| `tests/` | Guardrail + graph smoke tests |
+| `tests/` | Guardrail, graph smoke, and golden-set evals |
+| `data/evals/` | Golden incidents for the eval harness |
+| `src/evals/` | Eval runner used by pytest, CLI, and `/v1/evals/run` |
 
 ## Quick start (local) — Command Prompt (`cmd.exe`)
 
@@ -120,6 +122,20 @@ set PYTHONPATH=src
 set LLM_PROVIDER=mock
 pytest -q
 ```
+
+### Golden-set evals
+
+Scores the **pipeline** (routing, typed proposals, guardrail verdicts) against fixtures in `data/evals/golden_cases.yaml`. Same runner as CI.
+
+```bat
+set PYTHONPATH=src
+set LLM_PROVIDER=mock
+python scripts\run_evals.py
+```
+
+Or with the API running: `POST /v1/evals/run` · `GET /v1/evals` · `/ui` → **Run evals**.
+
+When you switch to Azure AI Foundry, re-run the suite and compare `score` + failed case ids against mock.
 
 ## LLM providers
 
@@ -216,6 +232,7 @@ Do not treat those two files as generated magic. Interviewers will probe them.
 - `GET /v1/audit`
 - `GET /v1/incidents/{id}/audit`
 - `GET /v1/audit/export?format=json|csv`
+- `GET /v1/evals/cases` · `POST /v1/evals/run` · `GET /v1/evals`
 - Approvals: HIGH risk needs 2 different `decided_by` values
 
 Switch policy pack:

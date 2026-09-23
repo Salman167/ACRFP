@@ -11,6 +11,7 @@ from fastapi.responses import FileResponse, PlainTextResponse, Response
 from pydantic import BaseModel, Field
 from pathlib import Path
 
+from evals.harness import load_golden_cases, run_eval_suite
 from orchestrator.graph import run_incident
 from shared.audit import AuditEvent, get_audit_store
 from shared.models import (
@@ -25,7 +26,7 @@ from shared.models import (
 app = FastAPI(
     title="ACRFP API",
     description="Agentic Cloud Reliability & FinOps Platform",
-    version="0.2.0",
+    version="0.3.0",
 )
 app.add_middleware(
     CORSMiddleware,
@@ -45,6 +46,7 @@ def approval_console() -> FileResponse:
 # In-memory store for local/demo. Swap to Postgres/Cosmos in production.
 CASES: dict[str, IncidentCase] = {}
 APPROVALS: dict[str, ApprovalRecord] = {}
+LAST_EVAL_REPORT: dict[str, Any] | None = None
 
 
 class IngestResponse(BaseModel):
@@ -364,3 +366,51 @@ def export_audit(
         media_type="application/json",
         headers={"Content-Disposition": "attachment; filename=acrfp-audit.json"},
     )
+
+
+@app.get("/v1/evals/cases")
+def list_eval_cases() -> dict[str, Any]:
+    """List golden incidents used by the eval harness (no graph run)."""
+    cases = load_golden_cases()
+    return {
+        "suite": "acrfp-golden",
+        "count": len(cases),
+        "cases": [
+            {
+                "id": c.get("id"),
+                "description": c.get("description"),
+                "expect": c.get("expect") or {},
+            }
+            for c in cases
+        ],
+    }
+
+
+@app.get("/v1/evals")
+def get_last_eval() -> dict[str, Any]:
+    if LAST_EVAL_REPORT is None:
+        return {"suite": "acrfp-golden", "ran": False, "message": "No eval run yet. POST /v1/evals/run"}
+    return LAST_EVAL_REPORT
+
+
+@app.post("/v1/evals/run")
+def run_evals() -> dict[str, Any]:
+    """Score the LangGraph + guardrail pipeline against golden incidents."""
+    global LAST_EVAL_REPORT
+    report = run_eval_suite()
+    LAST_EVAL_REPORT = report
+    get_audit_store().record(
+        "eval.suite.completed",
+        (
+            f"golden eval score={report['score']} "
+            f"{report['cases_passed']}/{report['cases_total']} cases"
+        ),
+        actor="evals",
+        details={
+            "score": report["score"],
+            "passed": report["passed"],
+            "llm_provider": report["llm_provider"],
+            "failed": [c["id"] for c in report["cases"] if not c["passed"]],
+        },
+    )
+    return report

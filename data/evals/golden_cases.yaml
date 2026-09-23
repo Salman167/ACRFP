@@ -1,0 +1,104 @@
+# Golden incidents for the ACRFP eval harness.
+# These assert pipeline behaviour (routing, typed proposals, guardrail), not LLM prose.
+# Run: POST /v1/evals/run  or  pytest tests/test_evals.py
+
+cases:
+  - id: reliability_restart_allow
+    description: CrashLoop-style restarts in an app namespace should propose a low-risk restart and auto-allow.
+    event:
+      event_type: reliability
+      title: payments-api restart storm
+      description: many restarts and high memory
+      namespace: payments
+      resource: payments-api
+      region: local
+      metrics:
+        restarts: 9
+        memory_pct: 93
+        cpu_pct: 40
+        replicas: 3
+    expect:
+      specialists: [diagnosis]
+      action_types: [restart_pod]
+      decisions: [allow]
+      statuses: [resolved, remediating]
+      runbook_contains: crashloop
+
+  - id: cost_idle_requires_approval
+    description: Idle VM waste is MEDIUM — FinOps stop must park for a human, not auto-execute.
+    event:
+      event_type: cost
+      title: Idle VM spend anomaly
+      description: idle vm driving avoidable spend
+      namespace: batch
+      resource: etl-worker-vm
+      region: local
+      cost_signal:
+        idle_resource: true
+        idle_monthly_usd: 380
+        resource_id: /subscriptions/demo/vm/etl
+        sku: Standard_D4s_v5
+    expect:
+      specialists: [cost]
+      action_types: [stop_idle_resource]
+      decisions: [require_approval]
+      statuses: [awaiting_approval]
+
+  - id: protected_namespace_dual_approval
+    description: Restart in kube-system escalates to HIGH and needs two distinct approvers.
+    event:
+      event_type: reliability
+      title: coredns restart loop
+      description: kube-system dns restarts
+      namespace: kube-system
+      resource: coredns
+      region: local
+      metrics:
+        restarts: 8
+        memory_pct: 40
+        cpu_pct: 20
+        replicas: 2
+    expect:
+      specialists: [diagnosis]
+      action_types: [restart_pod]
+      decisions: [require_approval]
+      statuses: [awaiting_approval]
+      min_required_approvals: 2
+
+  - id: sovereign_region_deny
+    description: Region lock denies remediations outside the policy allow-list.
+    event:
+      event_type: reliability
+      title: payments-api restart storm
+      description: many restarts
+      namespace: payments
+      resource: payments-api
+      region: us-east-1
+      metrics:
+        restarts: 9
+        replicas: 3
+    expect:
+      specialists: [diagnosis]
+      decisions: [deny]
+      statuses: [blocked]
+
+  - id: cpu_scale_out_allow
+    description: CPU saturation proposes a bounded scale-out that stays LOW and auto-allows.
+    event:
+      event_type: reliability
+      title: checkout latency from cpu saturation
+      description: cpu throttling on checkout
+      namespace: payments
+      resource: checkout-api
+      region: local
+      metrics:
+        restarts: 0
+        cpu_pct: 96
+        memory_pct: 50
+        replicas: 3
+    expect:
+      specialists: [diagnosis]
+      action_types: [scale_deployment]
+      decisions: [allow]
+      statuses: [resolved, remediating]
+      runbook_contains: cpu
