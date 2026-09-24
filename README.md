@@ -98,14 +98,46 @@ Human approval (`POST /v1/approvals/{id}/decide`) does **not** re-run the graph.
 
 Read in this order for interviews: `models.py` → `graph.py` → `diagnosis.py` / `cost.py` / `remediation.py` → `llm.py` → `policy.py` → `executor/app.py` → `api/app.py`.
 
-## LangChain, LangGraph, and evals
+## Technical terms (LangChain, LangGraph, Langfuse, models)
 
-| Piece | Job in this repo |
-|-------|------------------|
-| LangChain | Thin model SDK in `llm.py` (`ChatOpenAI` / `ChatAnthropic`). Not used as an autonomous tool-loop. |
-| LangGraph | Orchestrator in `graph.py`. Nodes and edges; routing is code, not a prompt. |
-| `chat_json()` | Returns parsed JSON, or `None` (mock / missing key / error) so agents fall back to rules. |
-| Evals | Tests for the **pipeline**, not prose quality. Golden incidents in `data/evals/golden_cases.yaml`. |
+These names are easy to mix up. In this repo they have different jobs.
+
+| Term | What it is | Used here? |
+|------|------------|------------|
+| **LLM / model** | The text model (GPT, Claude, or a mock). Predicts the next tokens; it does not run kubectl. | Yes — only via `src/agents/llm.py` |
+| **LangChain** | Python SDK to call vendors with one interface (`invoke` messages, parse JSON). Also has chains, tools, and “agents,” which we do **not** use. | Yes — `ChatOpenAI` / `ChatAnthropic` only |
+| **LangGraph** | State machine: nodes (functions), edges (what runs next), shared `GraphState`. Built by the LangChain team; it is not “LangChain agents.” | Yes — `src/orchestrator/graph.py` |
+| **Langfuse** | Observability: traces each prompt, tokens, latency, and cost. Like LangSmith, but self-hostable / EU-friendly. | **Not wired yet.** Audit log covers incidents and verdicts, not prompt traces. Planned with App Insights. |
+| **Prompt** | System role (job + JSON schema) + user role (the incident). | Yes — inside each specialist |
+| **Temperature** | Randomness. We use `0` so the same incident tends to produce the same JSON. | Yes |
+| **Structured output** | Model must return fields a program can validate (`ActionProposal`). | Yes — Pydantic |
+| **RAG** | Fetch docs, then generate. Diagnosis keyword-matches `data/runbooks/*.md`. | Yes — local only; Azure AI Search later |
+| **Evals** | Tests for the pipeline (routing, action type, verdict), not writing quality. | Yes — golden set |
+| **Guardrail** | Policy outside the model. Not Langfuse and not the model’s `risk_hint`. | Yes — `policy.py` |
+
+**How they fit:** LangChain talks to the model. LangGraph decides the next step. Langfuse (later) would record what the model said. Evals decide if the system is still correct. Guardrail decides if an action may run.
+
+```
+LangChain  →  “call GPT/Claude/Foundry, give me JSON”
+LangGraph  →  triage → diagnosis/cost → remediate → guardrail → executor
+Langfuse   →  (planned) trace each LLM call
+Evals      →  replay golden incidents, score the graph + policy
+```
+
+### Models (`LLM_PROVIDER`)
+
+| Value | Model / backend | When |
+|-------|-----------------|------|
+| `mock` (default) | No network. Agents use rules. | CI, demos, no keys |
+| `openai` | `gpt-4o-mini` via LangChain `ChatOpenAI` | Public OpenAI key |
+| `anthropic` | `claude-sonnet-4-5` via `ChatAnthropic` | Anthropic key |
+| `azure_foundry` | Deployment name (default `claude-sonnet-4-5`) on Foundry `/openai/v1` | Azure-hosted model |
+
+`chat_json()` returns parsed JSON, or `None` if mock / missing key / error. Specialists then use rule fallbacks. Switching providers does not change LangGraph or `policy.py`.
+
+**Interview line:** we did not use a LangChain tool-calling agent with kubectl. We did not use Foundry Agent Service as the orchestrator. LangGraph is the playbook; the model only fills typed JSON.
+
+### Evals (how we score the stack)
 
 Evals call the same `run_incident()` as live ingest, then check specialists, `action_type`, guardrail verdict, and status. Score = checks passed / checks total. Same runner in `pytest`, `python scripts/run_evals.py`, and `POST /v1/evals/run`.
 
