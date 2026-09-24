@@ -4,6 +4,18 @@ Multi-agent system that watches Kubernetes/cloud signals, diagnoses **reliabilit
 
 Built for portfolio depth aimed at **EU public sector** and **Gulf (UAE/KSA) Azure/sovereign cloud** roles: agents that *manage infrastructure*, not just chat.
 
+## Product vs platform
+
+**ACRFP is the product** — one job: event in → diagnose → typed proposal → policy → dry-run or human approval.
+
+It is called a *platform* in the title because that job is split into reusable services (API, guardrail, executor), not one chatbot script. **Azure** (AKS, Ingress, later Foundry) is the hosting / model platform. Do not describe this repo as “I built Azure AI Foundry.”
+
+| Word | Meaning here |
+|------|----------------|
+| Product | The incident loop and `/ui` approval console |
+| Platform (in the name) | Shared backend services other UIs could reuse |
+| Azure / Foundry / AKS | Cloud platform this product runs on |
+
 ## Architecture
 
 Full notes: [`docs/architecture.md`](docs/architecture.md)
@@ -39,6 +51,65 @@ Event (mock / Event Hubs)
 1. Agents never call `kubectl`/ARM directly.
 2. Guardrail risk is computed from **action type + parameters**, not LLM self-rating.
 3. Executor never runs without an allow/approval path.
+
+## Frontend vs backend
+
+There is no separate React app. FastAPI serves both.
+
+| Layer | What it is | URL |
+|-------|------------|-----|
+| Frontend | Approval console (HTML + JS) | `GET /ui` |
+| Backend API catalog | Swagger (same APIs, form UI) | `/docs` |
+| Backend | FastAPI + LangGraph + agents + policy + executor | `/v1/*` |
+
+`/ui` only **displays and asks**. It calls `/v1/approvals/pending`, `/v1/incidents`, `/v1/approvals/{id}/decide`, and `/v1/evals/run`. Scripts such as `scripts/ingest_samples.py` talk only to the backend.
+
+On AKS, nginx Ingress is the HTTPS door in front of the API. It is not the frontend.
+
+## How the backend calls (which file calls which)
+
+The guardrail does **not** call the LLM. Agents call the model first. Policy runs after proposals exist.
+
+```
+POST /v1/incidents/ingest
+  src/api/app.py  ingest()
+    → src/orchestrator/graph.py  run_incident()
+          triage_node()                 no AI  (event_type → route_plan)
+          diagnosis_node()
+            → src/agents/diagnosis.py  diagnose()
+                  → src/agents/llm.py  chat_json()   ← only AI entry
+          cost_node()
+            → src/agents/cost.py  analyze_cost()
+                  → llm.py  chat_json()
+          remediate_node()
+            → src/agents/remediation.py  propose_actions()
+                  → llm.py  chat_json()  then ActionProposal objects
+          guardrail_node()              no AI
+            → HTTP src/guardrail/app.py  /v1/evaluate/batch
+                  → src/guardrail/policy.py  decide()
+            or in-process decide() if the guardrail service is down
+          executor_node()               no AI  (only if ALLOW)
+            → HTTP src/executor/app.py  /v1/execute
+```
+
+Shared types: `src/shared/models.py`. URLs and `LLM_PROVIDER`: `src/shared/config.py`.
+
+Human approval (`POST /v1/approvals/{id}/decide`) does **not** re-run the graph. It sends the parked proposal to the executor after enough distinct approvers.
+
+Read in this order for interviews: `models.py` → `graph.py` → `diagnosis.py` / `cost.py` / `remediation.py` → `llm.py` → `policy.py` → `executor/app.py` → `api/app.py`.
+
+## LangChain, LangGraph, and evals
+
+| Piece | Job in this repo |
+|-------|------------------|
+| LangChain | Thin model SDK in `llm.py` (`ChatOpenAI` / `ChatAnthropic`). Not used as an autonomous tool-loop. |
+| LangGraph | Orchestrator in `graph.py`. Nodes and edges; routing is code, not a prompt. |
+| `chat_json()` | Returns parsed JSON, or `None` (mock / missing key / error) so agents fall back to rules. |
+| Evals | Tests for the **pipeline**, not prose quality. Golden incidents in `data/evals/golden_cases.yaml`. |
+
+Evals call the same `run_incident()` as live ingest, then check specialists, `action_type`, guardrail verdict, and status. Score = checks passed / checks total. Same runner in `pytest`, `python scripts/run_evals.py`, and `POST /v1/evals/run`.
+
+Run evals after changing agents, prompts, `policy.py`, or `LLM_PROVIDER`. Unit-test pure policy rules in `tests/test_guardrail_policy.py` — do not use an LLM judge for allow/deny.
 
 ## Repo layout
 
@@ -146,9 +217,15 @@ Set in `.env`:
 | `mock` (default) | Deterministic rule-based agents — no keys needed |
 | `openai` | Needs `OPENAI_API_KEY` |
 | `anthropic` | Needs `ANTHROPIC_API_KEY` |
-| `azure_foundry` | Claude/OpenAI via Foundry model endpoint (`AZURE_FOUNDRY_*`) |
+| `azure_foundry` | Claude/OpenAI via Foundry **model endpoint** (`AZURE_FOUNDRY_*`) |
 
-Foundry **Agent Service** (threads/runs) is OpenAI-family only today; Claude is used via the **model endpoint** + our LangGraph orchestration — which is the skill you want to show.
+### Azure AI Foundry
+
+Foundry is Microsoft’s hosted model catalog and chat endpoint (Azure billing, identity, region). In this repo it is only the phone line in `chat_json()`. It does not replace LangGraph or `policy.py`.
+
+We use the **model endpoint** (`AZURE_FOUNDRY_ENDPOINT` + `/openai/v1`), not Foundry **Agent Service** (threads/runs). Agent Service is OpenAI-family only today; Claude stays on the endpoint + our graph — that is the skill to show.
+
+Code is ready (`src/agents/llm.py`). The running app still defaults to `mock`. To switch: deploy a model in Foundry → set `LLM_PROVIDER=azure_foundry` and the three `AZURE_FOUNDRY_*` vars → restart API → re-run evals and compare `score` + failed case ids to mock. Guardrail still decides risk.
 
 ## Production path (Azure)
 
@@ -194,6 +271,29 @@ helm upgrade --install acrfp infra/helm/acrfp -f infra/helm/acrfp/values-ingress
 ```
 
 `acrfp-api` uses `ClusterIP`; only nginx-ingress gets a public LoadBalancer. Guardrail and executor stay internal.
+
+### Ingress traffic path
+
+```
+Browser / curl
+  → DNS  api.acrfp.site  (GoDaddy A record)
+  → Azure Load Balancer on nginx-ingress
+  → nginx Ingress Controller  (TLS via cert-manager / Let's Encrypt)
+  → Service acrfp-api ClusterIP :80 → pod :8000
+  → API then calls http://acrfp-guardrail:8001 and http://acrfp-executor:8002
+     (cluster DNS only — no Ingress)
+```
+
+| Component | Namespace | Public? | Role |
+|-----------|-----------|---------|------|
+| nginx-ingress | `ingress-nginx` | Yes (LoadBalancer) | Only front door |
+| cert-manager | `cert-manager` | No | Issues `acrfp-api-tls` |
+| acrfp-api | `default` | Via Ingress host | Product API + `/ui` |
+| acrfp-guardrail | `default` | No | Policy |
+| acrfp-executor | `default` | No | Dry-run |
+| Argo CD | `argocd` | Optional LB | GitOps, not the product |
+
+Laptop demos do not need Ingress (`localhost:8000`). Ingress is the AKS HTTPS edge only.
 
 ## Helm and Argo CD
 
