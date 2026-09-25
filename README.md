@@ -62,7 +62,7 @@ There is no separate React app. FastAPI serves both.
 | Backend API catalog | Swagger (same APIs, form UI) | `/docs` |
 | Backend | FastAPI + LangGraph + agents + policy + executor | `/v1/*` |
 
-`/ui` only **displays and asks**. It calls `/v1/approvals/pending`, `/v1/incidents`, `/v1/approvals/{id}/decide`, and `/v1/evals/run`. Scripts such as `scripts/ingest_samples.py` talk only to the backend.
+`/ui` only **displays and asks**. It calls `/v1/summary`, `/v1/approvals/pending`, `/v1/incidents` (optional `?status=`), `/v1/approvals/{id}/decide`, and `/v1/evals/run`. Scripts such as `scripts/ingest_samples.py` talk only to the backend.
 
 On AKS, nginx Ingress is the HTTPS door in front of the API. It is not the frontend.
 
@@ -219,6 +219,19 @@ python scripts\ingest_samples.py
 
 Interactive docs: http://localhost:8000/docs
 
+### Ops summary and filters (`feature/ops-summary`)
+
+The approval console is a live dashboard, not only an approve/reject list.
+
+| Piece | What it does |
+|-------|----------------|
+| `GET /v1/summary` | Counts incidents by `status` and `event_type`, pending approval total, `llm_provider`, `policy_pack`, last eval `score` |
+| `GET /v1/incidents?status=` | Filter: `resolved`, `awaiting_approval`, `blocked`, `remediating` (comma-separated) |
+| `GET /v1/incidents?event_type=` | Filter: `reliability`, `cost`, `mixed` |
+| `/ui` cards + dropdown | Renders summary counts; the status dropdown calls the filter query |
+
+Does **not** re-run LangGraph. It reads the in-memory `CASES` / `APPROVALS` stores. Tests: `tests/test_ops_summary.py`.
+
 ### Tests
 
 ```bat
@@ -348,6 +361,7 @@ Do not treat those two files as generated magic. Interviewers will probe them.
 ### Done (Week 1 + Phase A + Week 3 infra)
 - Local multi-agent platform (LangGraph + 3 specialists + executor dry-run)
 - Guardrail policy engine + HTTP proxy + `/ui` approval console
+- Ops summary API + incident status/type filters on `/ui` (`feature/ops-summary`)
 - Sample events, tests, Docker Compose, K8s manifests, CI
 - Audit trail, YAML policy packs, dual approval, region lock, webhook notify
 - **Terraform modules** for RG + AKS (`centralindia` cluster live)
