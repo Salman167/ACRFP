@@ -61,6 +61,19 @@ class ApprovalDecision(BaseModel):
     comment: str | None = None
 
 
+class OpsSummary(BaseModel):
+    """Live counts for the approval console and Swagger demos."""
+
+    incidents_total: int
+    by_status: dict[str, int]
+    by_event_type: dict[str, int]
+    pending_approvals: int
+    llm_provider: str
+    policy_pack: str
+    last_eval_score: float | None = None
+    last_eval_passed: bool | None = None
+
+
 def _case_from_graph(result: dict[str, Any], event: IncidentEvent) -> IncidentCase:
     from shared.models import (
         ActionProposal,
@@ -234,9 +247,49 @@ def ingest(event: IncidentEvent) -> IngestResponse:
     return IngestResponse(incident_id=case.incident_id, status=case.status, case=case)
 
 
+def _filtered_cases(
+    status: str | None = None,
+    event_type: str | None = None,
+) -> list[IncidentCase]:
+    cases = list(CASES.values())
+    if status:
+        wanted = {part.strip().lower() for part in status.split(",") if part.strip()}
+        cases = [c for c in cases if c.status.lower() in wanted]
+    if event_type:
+        wanted = {part.strip().lower() for part in event_type.split(",") if part.strip()}
+        cases = [c for c in cases if c.event.event_type.value in wanted]
+    return sorted(cases, key=lambda c: c.created_at, reverse=True)
+
+
+@app.get("/v1/summary", response_model=OpsSummary)
+def ops_summary() -> OpsSummary:
+    """Counts by status/type plus current provider — demo dashboard for /ui."""
+
+    from collections import Counter
+
+    from shared.config import get_settings
+
+    settings = get_settings()
+    cases = list(CASES.values())
+    report = LAST_EVAL_REPORT or {}
+    return OpsSummary(
+        incidents_total=len(cases),
+        by_status=dict(Counter(c.status for c in cases)),
+        by_event_type=dict(Counter(c.event.event_type.value for c in cases)),
+        pending_approvals=sum(1 for a in APPROVALS.values() if a.status == "pending"),
+        llm_provider=settings.llm_provider,
+        policy_pack=settings.policy_pack,
+        last_eval_score=report.get("score"),
+        last_eval_passed=report.get("passed"),
+    )
+
+
 @app.get("/v1/incidents", response_model=list[IncidentCase])
-def list_incidents() -> list[IncidentCase]:
-    return sorted(CASES.values(), key=lambda c: c.created_at, reverse=True)
+def list_incidents(
+    status: str | None = Query(default=None, description="Comma-separated: resolved,awaiting_approval,blocked"),
+    event_type: str | None = Query(default=None, description="Comma-separated: reliability,cost,mixed"),
+) -> list[IncidentCase]:
+    return _filtered_cases(status=status, event_type=event_type)
 
 
 @app.get("/v1/incidents/{incident_id}", response_model=IncidentCase)

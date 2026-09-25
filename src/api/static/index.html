@@ -63,14 +63,29 @@
     .tag.warn { background: #fff3d6; color: var(--warn); }
     .tag.ok { background: #e3f6ec; color: var(--ok); }
     label { display: block; font-size: 0.85rem; margin-bottom: 0.25rem; color: var(--muted); }
-    input {
+    input, select {
       width: 100%;
       max-width: 280px;
       padding: 0.5rem 0.65rem;
       border: 1px solid var(--line);
       border-radius: 6px;
       margin-bottom: 0.75rem;
+      background: #fff;
     }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 0.65rem;
+      margin-bottom: 1rem;
+    }
+    .stat {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 0.75rem 0.85rem;
+    }
+    .stat strong { display: block; font-size: 1.25rem; }
+    .stat span { color: var(--muted); font-size: 0.8rem; }
     .actions { display: flex; gap: 0.5rem; margin-top: 0.75rem; }
     #status { margin-bottom: 1rem; color: var(--muted); font-size: 0.9rem; }
     h2 { font-size: 1rem; margin: 1.25rem 0 0.6rem; }
@@ -88,11 +103,22 @@
         <label for="approver">Your name (approver)</label>
         <input id="approver" value="alice" />
       </div>
+      <div>
+        <label for="statusFilter">Incident status</label>
+        <select id="statusFilter">
+          <option value="">All statuses</option>
+          <option value="awaiting_approval">Awaiting approval</option>
+          <option value="resolved">Resolved</option>
+          <option value="blocked">Blocked</option>
+          <option value="remediating">Remediating</option>
+        </select>
+      </div>
       <div style="align-self: end;">
         <button class="btn-primary" id="refreshBtn" type="button">Refresh</button>
         <button class="btn-ghost" id="evalBtn" type="button">Run evals</button>
       </div>
     </div>
+    <div class="stats" id="summary"></div>
     <div id="status">Loading…</div>
 
     <h2>Golden-set evals</h2>
@@ -109,24 +135,47 @@
     const incidentsEl = document.getElementById("incidents");
     const evalsEl = document.getElementById("evals");
     const statusEl = document.getElementById("status");
+    const summaryEl = document.getElementById("summary");
     const approverEl = document.getElementById("approver");
+    const statusFilterEl = document.getElementById("statusFilter");
 
     async function loadAll() {
       statusEl.textContent = "Refreshing…";
+      const statusFilter = (statusFilterEl.value || "").trim();
+      const incidentsUrl = statusFilter
+        ? `/v1/incidents?status=${encodeURIComponent(statusFilter)}`
+        : "/v1/incidents";
       try {
-        const [pending, incidents, evals] = await Promise.all([
+        const [pending, incidents, evals, summary] = await Promise.all([
           fetch("/v1/approvals/pending").then((r) => r.json()),
-          fetch("/v1/incidents").then((r) => r.json()),
+          fetch(incidentsUrl).then((r) => r.json()),
           fetch("/v1/evals").then((r) => r.json()),
+          fetch("/v1/summary").then((r) => r.json()),
         ]);
         renderPending(pending);
         renderIncidents(incidents);
         renderEvals(evals);
-        statusEl.textContent = `Pending: ${pending.length} · Incidents: ${incidents.length} · ${new Date().toLocaleTimeString()}`;
+        renderSummary(summary);
+        statusEl.textContent = `Pending: ${pending.length} · Showing: ${incidents.length} · ${new Date().toLocaleTimeString()}`;
       } catch (err) {
         statusEl.textContent = "Failed to load. Is the API running?";
         console.error(err);
       }
+    }
+
+    function renderSummary(s) {
+      if (!s) {
+        summaryEl.innerHTML = "";
+        return;
+      }
+      const score = s.last_eval_score == null ? "—" : s.last_eval_score;
+      summaryEl.innerHTML = `
+        <div class="stat"><strong>${s.incidents_total}</strong><span>Incidents</span></div>
+        <div class="stat"><strong>${s.pending_approvals}</strong><span>Pending approvals</span></div>
+        <div class="stat"><strong>${s.by_status.awaiting_approval || 0}</strong><span>Awaiting approval</span></div>
+        <div class="stat"><strong>${s.by_status.resolved || 0}</strong><span>Resolved</span></div>
+        <div class="stat"><strong>${score}</strong><span>Last eval score · ${s.llm_provider}</span></div>
+      `;
     }
 
     function renderPending(items) {
@@ -207,6 +256,7 @@
       }
     });
     document.getElementById("refreshBtn").addEventListener("click", loadAll);
+    statusFilterEl.addEventListener("change", loadAll);
     loadAll();
     setInterval(loadAll, 8000);
   </script>

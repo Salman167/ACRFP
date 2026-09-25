@@ -212,7 +212,8 @@ python scripts\ingest_samples.py
 
 - `GET  /health`
 - `POST /v1/incidents/ingest`
-- `GET  /v1/incidents`
+- `GET  /v1/incidents` · query `status=` and `event_type=` (comma-separated)
+- `GET  /v1/summary` · counts by status/type, pending approvals, last eval score
 - `GET  /v1/approvals/pending`
 - `POST /v1/approvals/{id}/decide` body: `{"decision":"approved","decided_by":"you"}`
 
@@ -365,6 +366,7 @@ Do not treat those two files as generated magic. Interviewers will probe them.
 - `GET /v1/incidents/{id}/audit`
 - `GET /v1/audit/export?format=json|csv`
 - `GET /v1/evals/cases` · `POST /v1/evals/run` · `GET /v1/evals`
+- `GET /v1/summary` · `GET /v1/incidents?status=&event_type=`
 - Approvals: HIGH risk needs 2 different `decided_by` values
 
 Switch policy pack:
