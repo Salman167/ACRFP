@@ -22,7 +22,29 @@ Portfolio reference for interviews, LinkedIn, and the demo video intro.
 | Frontend | Approval UI (`GET /ui`) | Browser |
 | Backend | FastAPI + agents + guardrail + executor | `/v1/*`, Swagger `/docs` |
 
-Same APIs power Swagger and `/ui`.
+Same APIs power Swagger and `/ui`. `/ui` also calls `GET /v1/summary` and `GET /v1/incidents?status=`.
+
+Shareable copy for SharePoint: [`sharepoint/ACRFP-end-to-end-call-flow.md`](sharepoint/ACRFP-end-to-end-call-flow.md).
+
+## End-to-end file call (from user input)
+
+Start: `POST /v1/incidents/ingest` (Swagger, curl, or `scripts/ingest_samples.py`).
+
+| Step | File | Function | Calls `llm.py`? |
+|------|------|----------|-----------------|
+| 1 | `src/api/app.py` | `ingest()` | No |
+| 2 | `src/orchestrator/graph.py` | `run_incident()` → `graph.invoke()` | No |
+| 3 | `graph.py` | `triage_node()` | No — `event_type` only |
+| 4 | `src/agents/diagnosis.py` | `diagnose()` | **Yes** — `chat_json()` if routed |
+| 5 | `src/agents/cost.py` | `analyze_cost()` | **Yes** — only if cost/mixed |
+| 6 | `src/agents/remediation.py` | `propose_actions()` | **Yes** — then typed `ActionProposal` |
+| 7 | `src/guardrail/policy.py` | `decide()` | **Never** |
+| 8 | `src/executor/app.py` | `execute()` | **Never** — only if ALLOW |
+| 9 | `src/api/app.py` | `_case_from_graph()` + audit | No |
+
+`chat_json()` lives only in `src/agents/llm.py`. `mock` returns `None` and the specialist uses rules. Guardrail and executor never import LangChain.
+
+Human approve (`POST /v1/approvals/{id}/decide`) skips the graph and sends one parked proposal to the executor.
 
 ## Azure Week 3 layout
 

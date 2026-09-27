@@ -161,6 +161,25 @@
       <div class="say">
         <strong>Interview point:</strong> Agents never call kubectl/ARM directly. Risk comes from action type + parameters in the guardrail, not from the LLM “rating itself”.
       </div>
+
+      <h3>From-scratch: who calls whom</h3>
+      <p class="muted">User POSTs <code>/v1/incidents/ingest</code>. Only specialists call <code>src/agents/llm.py</code>.</p>
+      <table>
+        <thead>
+          <tr><th>Step</th><th>File</th><th>Calls llm.py?</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>1</td><td><code>src/api/app.py</code> <code>ingest()</code></td><td>No</td></tr>
+          <tr><td>2</td><td><code>src/orchestrator/graph.py</code> <code>run_incident()</code></td><td>No</td></tr>
+          <tr><td>3</td><td><code>triage_node()</code> — route on <code>event_type</code></td><td>No</td></tr>
+          <tr><td>4</td><td><code>diagnosis.py</code> / <code>cost.py</code> if routed</td><td>Yes — <code>chat_json()</code></td></tr>
+          <tr><td>5</td><td><code>remediation.py</code> <code>propose_actions()</code></td><td>Yes — then typed proposals</td></tr>
+          <tr><td>6</td><td><code>guardrail/policy.py</code> <code>decide()</code></td><td>Never</td></tr>
+          <tr><td>7</td><td><code>executor/app.py</code> if ALLOW</td><td>Never</td></tr>
+          <tr><td>8</td><td>API wraps case + audit back to the user</td><td>No</td></tr>
+        </tbody>
+      </table>
+      <p class="muted">Uploadable copy: <code>docs/sharepoint/ACRFP-end-to-end-call-flow.md</code>.</p>
     </section>
 
     <section id="proof">

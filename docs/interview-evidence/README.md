@@ -49,7 +49,8 @@ az aks stop -g acrfp-rg -n acrfp-aks
 > I built **ACRFP** — an agentic Cloud Reliability & FinOps control plane.  
 > Incidents hit a FastAPI API on AKS. LangGraph agents propose diagnosis, cost, and remediation.  
 > A **guardrail** decides allow / require approval / deny. High-risk actions go to a dual-approval UI.  
-> Execution today is **dry-run** with a full **audit trail**. Public HTTPS is on `api.acrfp.site` via Ingress + Let’s Encrypt.
+> Execution today is **dry-run** with a full **audit trail**. Public HTTPS is on `api.acrfp.site` via Ingress + Let’s Encrypt.  
+> Only three files call `llm.py` (`diagnosis`, `cost`, `remediation`). Guardrail and executor never talk to the model.
 
 ---
 
@@ -89,6 +90,7 @@ curl.exe -o docs\interview-evidence\api-dumps\03-audit.json "https://api.acrfp.s
 | [`INTERVIEW_DEMO.html`](INTERVIEW_DEMO.html) | Interviewer (visual) |
 | [`../project-journey-runbook.md`](../project-journey-runbook.md) | Deep commands + issues/fixes |
 | [`../architecture.md`](../architecture.md) | Architecture narrative |
+| [`../sharepoint/ACRFP-end-to-end-call-flow.md`](../sharepoint/ACRFP-end-to-end-call-flow.md) | SharePoint / email: input → file → `llm.py` |
 
 ---
 

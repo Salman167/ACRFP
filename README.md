@@ -98,6 +98,23 @@ Human approval (`POST /v1/approvals/{id}/decide`) does **not** re-run the graph.
 
 Read in this order for interviews: `models.py` → `graph.py` → `diagnosis.py` / `cost.py` / `remediation.py` → `llm.py` → `policy.py` → `executor/app.py` → `api/app.py`.
 
+Shareable walkthrough (upload to SharePoint / send to interviewers): [`docs/sharepoint/ACRFP-end-to-end-call-flow.md`](docs/sharepoint/ACRFP-end-to-end-call-flow.md). Same story: [`docs/architecture.md`](docs/architecture.md), [`docs/interview-evidence/`](docs/interview-evidence/).
+
+### From-scratch: one ingest (who calls `llm.py`)
+
+Example input: `payments-api` restart storm (`event_type: reliability`). You POST `/v1/incidents/ingest`. You never call `llm.py` yourself.
+
+1. `src/api/app.py` `ingest()` → `run_incident(event_dict)` — no model.
+2. `src/orchestrator/graph.py` `run_incident()` → `graph.invoke()` — LangGraph picks the next **function**.
+3. `triage_node()` — if/else on `event_type`. This event → `["diagnosis"]`. No `llm.py`.
+4. `diagnosis_node()` → `src/agents/diagnosis.py` `diagnose()` → **`src/agents/llm.py` `chat_json()`** (1st model call, or `None` if `mock`) → `DiagnosisResult`.
+5. `remediate_node()` → `src/agents/remediation.py` `propose_actions()` → **`llm.py` `chat_json()`** (2nd call, or rules) → `ActionProposal` list. **Model is done.**
+6. `guardrail_node()` → `src/guardrail/app.py` or in-process `src/guardrail/policy.py` `decide()` — no `llm.py`.
+7. If ALLOW: `executor_node()` → `src/executor/app.py` — dry-run kubectl string. No `llm.py`.
+8. Back to `ingest()` → `_case_from_graph()` + `src/shared/audit.py` → JSON to you.
+
+`llm.py` is imported only by `diagnosis.py`, `cost.py`, and `remediation.py`. Cost is skipped unless `event_type` is `cost` or `mixed`. `/ui` approve does **not** call `llm.py`.
+
 ## Technical terms (LangChain, LangGraph, Langfuse, models)
 
 These names are easy to mix up. In this repo they have different jobs.
@@ -158,6 +175,7 @@ Run evals after changing agents, prompts, `policy.py`, or `LLM_PROVIDER`. Unit-t
 | `infra/argocd/` | Argo CD application manifest |
 | `infra/terraform/` | Terraform root — calls `modules/rg` + `modules/aks` |
 | `docs/architecture.md` | Architecture write-up + images |
+| `docs/sharepoint/` | SharePoint-ready end-to-end call flow |
 | `docs/interview-evidence/` | Offline interviewer demo pack (HTML + screenshots) |
 | `scripts/capture_interview_evidence.ps1` | Capture live screenshots/API dumps before stopping AKS |
 | `scripts/terraform_apply.ps1` | Create Azure infra |
