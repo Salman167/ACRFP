@@ -289,7 +289,104 @@ Foundry is Microsoft’s hosted model catalog and chat endpoint (Azure billing, 
 
 We use the **model endpoint** (`AZURE_FOUNDRY_ENDPOINT` + `/openai/v1`), not Foundry **Agent Service** (threads/runs). Agent Service is OpenAI-family only today; Claude stays on the endpoint + our graph — that is the skill to show.
 
-Code is ready (`src/agents/llm.py`). The running app still defaults to `mock`. To switch: deploy a model in Foundry → set `LLM_PROVIDER=azure_foundry` and the three `AZURE_FOUNDRY_*` vars → restart API → re-run evals and compare `score` + failed case ids to mock. Guardrail still decides risk.
+Code is ready (`src/agents/llm.py`). The running app still defaults to `mock`. Guardrail still decides risk after the model returns JSON.
+
+#### What “deploy to Foundry” means here
+
+You do **not** upload ACRFP into Foundry. You deploy a **model** in Azure AI Foundry, then point this API at that model.
+
+```
+Azure Portal / Foundry
+  → create project in a region (e.g. westeurope / uaenorth)
+  → deploy Claude or GPT from the catalog
+  → copy endpoint + key + deployment name
+        ↓
+ACRFP .env / AKS secrets
+  LLM_PROVIDER=azure_foundry
+  AZURE_FOUNDRY_*
+        ↓
+src/agents/llm.py  chat_json()
+  ChatOpenAI → {endpoint}/openai/v1
+        ↓
+diagnosis / cost / remediation get JSON
+        ↓
+guardrail.policy.decide()   (unchanged)
+```
+
+#### Step-by-step (Azure portal)
+
+1. Sign in to [Azure AI Foundry](https://ai.azure.com) (or create an Azure AI / Foundry resource in the portal).
+2. Pick a **region** that matches your sovereignty story (`westeurope`, `northeurope`, `uaenorth`, … — not a random US endpoint for EU/Gulf demos).
+3. Open the **model catalog** → choose a chat model (this repo defaults to deployment name `claude-sonnet-4-5`; GPT-family also works via the same OpenAI-compatible URL).
+4. Click **Deploy** → note:
+   - **Endpoint** (base URL of the resource)
+   - **API key** (or plan Key Vault + managed identity later)
+   - **Deployment name** (exact string your app will send as `model=`)
+5. Do **not** create a Foundry Agent / thread for ACRFP. Keep orchestration in LangGraph.
+
+#### Wire local (Command Prompt)
+
+```bat
+cd /d c:\Users\Administrator\OneDrive\Desktop\salman_genai\Multi_agents
+copy .env.example .env
+```
+
+Edit `.env`:
+
+```bat
+LLM_PROVIDER=azure_foundry
+AZURE_FOUNDRY_ENDPOINT=https://YOUR-RESOURCE.cognitiveservices.azure.com
+AZURE_FOUNDRY_API_KEY=YOUR_KEY
+AZURE_FOUNDRY_DEPLOYMENT=claude-sonnet-4-5
+```
+
+Then:
+
+```bat
+set PYTHONPATH=src
+uvicorn api.app:app --reload --port 8000
+```
+
+In another window:
+
+```bat
+set PYTHONPATH=src
+python scripts\ingest_samples.py
+python scripts\run_evals.py
+```
+
+Compare eval `score` and failed case ids to a prior `mock` run. If Foundry is unreachable or the key is empty, `chat_json()` returns `None` and agents fall back to rules (same as mock).
+
+#### Wire on AKS (when the app is deployed)
+
+Set the same four values as env on the **api** Deployment (and later Key Vault), restart pods, then ingest + run evals against `https://api.acrfp.site`. Guardrail and executor env do **not** need Foundry keys — only the API process that runs the agents.
+
+Example (patch after deploy; prefer Secrets in real use):
+
+```powershell
+kubectl set env deployment/acrfp-api `
+  LLM_PROVIDER=azure_foundry `
+  AZURE_FOUNDRY_ENDPOINT=https://YOUR-RESOURCE.cognitiveservices.azure.com `
+  AZURE_FOUNDRY_API_KEY=YOUR_KEY `
+  AZURE_FOUNDRY_DEPLOYMENT=claude-sonnet-4-5
+```
+
+#### Checklist after switch
+
+| Check | Pass looks like |
+|-------|-----------------|
+| Ingest still returns a case | `/v1/incidents` has diagnosis / proposals |
+| Proposals still typed | Valid `ActionProposal` / `action_type` |
+| Guardrail unchanged | Same allow / approve / deny rules |
+| Evals | `POST /v1/evals/run` or `python scripts\run_evals.py` — investigate any new failures |
+| No key in Git | Only `.env` / K8s Secret / Key Vault |
+
+#### Interview lines
+
+- “Foundry hosts the model; ACRFP hosts the control plane.”
+- “We call the Foundry **model endpoint**, not Agent Service, so Claude + our graph stay under our policy.”
+- “Switching mock → Foundry is an env change in `llm.py`, not a rewrite of triage or `policy.py`.”
+
 
 ## Production path (Azure)
 
