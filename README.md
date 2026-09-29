@@ -365,6 +365,85 @@ Laptop demos do not need Ingress (`localhost:8000`). Ingress is the AKS HTTPS ed
 - ClusterIssuers: `infra/platform/cluster-issuer.yaml`
 - Argo CD app: `infra/argocd/acrfp-application.yaml` (replace `repoURL` with your Git repo)
 
+## How to scale this platform
+
+Scale **services**, **state**, and **models** separately. Do not scale by giving the LLM `kubectl`.
+
+### What already scales (or is ready to)
+
+| Piece | Today | Scale path |
+|-------|-------|------------|
+| API / guardrail / executor | Separate processes; guardrail can run 2+ replicas | Horizontal pods behind Ingress; keep guardrail and executor **ClusterIP only** |
+| Ingest | Sync `POST /v1/incidents/ingest` | Put **Event Hubs / Service Bus** in front; workers pull and call `run_incident()` |
+| Triage | Deterministic `if/else` on `event_type` | Stays cheap at high volume — never replace with an LLM router |
+| Policy | YAML packs + `policy.py` | Version packs in Git; run many API replicas against the same pack |
+| Models | `mock` / OpenAI / Anthropic / Foundry via `llm.py` | Raise Foundry quota / PTU; keep `temperature=0` and structured JSON |
+| Runbooks | Local keyword match | Move to **Azure AI Search** when the corpus grows |
+| Evals | Golden set in CI | Re-run after every prompt or provider change before promoting |
+
+### Required before multi-replica API
+
+Cases and approvals are **in-memory** today. Before scaling the API past one pod:
+
+1. Move `CASES` / `APPROVALS` to **Cosmos DB or Postgres**.
+2. Keep audit append-only (JSONL / Log Analytics / Blob).
+3. Idempotency on `event_id` so the same alert does not remediate twice.
+4. Optional: parallel diagnosis + cost for `mixed` events (today sequential).
+
+### What not to do when scaling
+
+- Do not auto-scale live `delete_*` by adding executor replicas alone.
+- Do not put Foundry Agent Service (or a LangChain tool-loop) in charge of cluster writes.
+- Do not expose guardrail or executor on a public LoadBalancer.
+- Do not stuff full cluster dumps into prompts — bound tokens; retrieve a few runbooks only.
+
+### Multi-cluster sketch
+
+```
+Event Hubs (per subscription / region)
+        → API workers (stateless) + shared DB
+              → Guardrail service (shared policy packs)
+                    → Executor per cluster (scoped ServiceAccount / RBAC)
+                          → Foundry in-region (westeurope / uaenorth / …)
+```
+
+Control plane (API, graph, policy, audit) scales with queues + DB.  
+Data plane (executor) scales per cluster with **least-privilege RBAC**, not one god credential.
+
+## Governance — how this project follows it
+
+Governance here means: **who may do what**, **who approved**, and **can you prove it**. It is policy-as-code + human gates + audit — not a PDF.
+
+### Rules already enforced in code
+
+| Control | Where | What it does |
+|---------|-------|--------------|
+| Separation of duties | Graph → agents → guardrail → executor | Agents **propose** only; they never call `kubectl` / ARM |
+| Authoritative risk | `src/guardrail/policy.py` | Risk from **action type + parameters + namespace + region**; agent `risk_hint` can only **raise** risk |
+| Deny-unknown / deny-critical | Policy packs | Unknown actions and CRITICAL (`delete_namespace`, `delete_resource_group`, `modify_iam`) are denied |
+| Human-in-the-loop | `/ui` + `/v1/approvals` | MEDIUM → 1 approver; HIGH → **2 distinct** `decided_by` (same person cannot count twice) |
+| Sovereign region lock | `allowed_regions` in YAML | e.g. deny `us-east-1`; prod pack targets EU / UAE / Qatar |
+| Protected namespaces | YAML packs | `kube-system`, `prod`, and (in `prod`) `payments` / `checkout` escalate to HIGH |
+| Scale limits | YAML `limits` | Cap replicas and scale delta so auto-remediation cannot explode capacity |
+| Reconstructability | `src/shared/audit.py` | Ingest, verdict (`policy_ids`), approval, execution — export JSON/CSV |
+| Change control | CI + golden evals | `pytest` with `LLM_PROVIDER=mock`; evals fail if routing / verdicts drift |
+| Policy packs | `data/policies/local.yaml` vs `prod.yaml` | Switch with `POLICY_PACK=prod` without rewriting agents |
+| GitOps path | Helm + Argo CD | Desired deploy state lives in Git |
+
+### How you follow governance day to day
+
+1. **Never** let a specialist call the executor. New remediations must be an `ActionType` + `ActionProposal`, then pass `decide()`.
+2. Change safety rules in **YAML packs** (or `policy.py`), review in Git, re-run `pytest` + `python scripts/run_evals.py`.
+3. Use **`POLICY_PACK=prod`** for regulated demos (stricter scale caps, no `local` region, more protected namespaces).
+4. For HIGH risk: collect **two different** approvers in `/ui` before execute.
+5. After every incident: show `/v1/audit` (or export) — who proposed, which `POL-*` ids fired, who approved, dry-run command.
+6. After prompt or Foundry changes: re-run **golden evals** and compare `score` + failed case ids to mock.
+7. Keep Foundry / keys out of Git; later use Key Vault + managed identity.
+
+### Honest gaps (say this in interviews)
+
+Not wired yet: Azure AD on `/ui`, ServiceNow ticket link, Key Vault, live executor RBAC, Langfuse prompt traces. Identity on approvals is still a string (`alice` / `bob`). Those are the next governance layer — the **architectural** controls (separation, policy, dual approval, region lock, audit) are what this repo already demonstrates.
+
 ## What you must be able to explain
 
 Open and walk through line-by-line:
