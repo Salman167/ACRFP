@@ -123,6 +123,20 @@ Dry-run. Cluster is not changed.
 
 ---
 
+## Azure AI Foundry (how you switch the model)
+
+You deploy a **model** in Foundry; you do not deploy ACRFP into Foundry.
+
+1. Foundry portal → deploy Claude/GPT in an allow-list region → copy endpoint, key, deployment name.
+2. Set `LLM_PROVIDER=azure_foundry` plus `AZURE_FOUNDRY_ENDPOINT`, `AZURE_FOUNDRY_API_KEY`, `AZURE_FOUNDRY_DEPLOYMENT`.
+3. Restart API (local uvicorn or `acrfp-api` on AKS). Only the API needs these vars.
+4. Re-ingest + run golden evals; compare score to mock.
+5. Keep using the **model endpoint** (`…/openai/v1` via `llm.py`), not Foundry Agent Service.
+
+Details: root `README.md` → *Azure AI Foundry*.
+
+---
+
 ## Other user inputs (not ingest)
 
 | You do | Files | `llm.py`? |

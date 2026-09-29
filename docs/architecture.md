@@ -120,6 +120,19 @@ flowchart TB
 
 **Traffic path:** `https://api.acrfp.site` → nginx → Ingress (TLS) → `acrfp-api:80` → guardrail / executor (internal only).
 
+## Azure AI Foundry (model only)
+
+Foundry hosts the **LLM**. ACRFP (on AKS or laptop) stays the control plane.
+
+```
+Foundry model deployment (Claude/GPT in-region)
+        ↑ chat via /openai/v1
+acrfp-api  (LLM_PROVIDER=azure_foundry → src/agents/llm.py)
+        → acrfp-guardrail / acrfp-executor   (no Foundry keys)
+```
+
+Wire steps and env vars: root [`README.md`](../README.md) (*Azure AI Foundry*) and [`project-journey-runbook.md`](project-journey-runbook.md) Phase 3. Do not use Foundry Agent Service as the orchestrator.
+
 | Path | Role |
 |------|------|
 | `scripts/install_aks_platform.ps1` | Helm + nginx + cert-manager + Argo CD |

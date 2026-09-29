@@ -466,12 +466,44 @@ docker push acrfp752f8b6b.azurecr.io/acrfp-api:dev
 
 ---
 
-## Phase 3 preview — Azure Foundry (not done yet)
+## Phase 3 — Azure AI Foundry (wire the model; do not upload the app)
 
-**Goal:** set `LLM_PROVIDER=azure_foundry` so agents use a real model.  
-**Guardrail still decides risk** — Foundry does not auto-approve dangerous actions.
+**Goal:** set `LLM_PROVIDER=azure_foundry` so diagnosis / cost / remediation call a real model via `src/agents/llm.py`.  
+**Guardrail still decides risk** — Foundry does not auto-approve dangerous actions.  
+**Full steps:** see README → *LLM providers → Azure AI Foundry*.
 
-When ready: create Foundry deployment → put endpoint/key in Secrets/env → restart API pods with new env → re-ingest and compare mock vs Foundry quality.
+### Deploy the model (Azure)
+
+1. Open [Azure AI Foundry](https://ai.azure.com) → project in `westeurope` / `uaenorth` (or your allow-list region).
+2. Model catalog → **Deploy** Claude or GPT → copy endpoint, API key, deployment name.
+3. Do **not** use Foundry Agent Service for ACRFP — keep LangGraph as the orchestrator.
+
+### Wire local
+
+```bat
+set LLM_PROVIDER=azure_foundry
+set AZURE_FOUNDRY_ENDPOINT=https://YOUR-RESOURCE.cognitiveservices.azure.com
+set AZURE_FOUNDRY_API_KEY=YOUR_KEY
+set AZURE_FOUNDRY_DEPLOYMENT=claude-sonnet-4-5
+set PYTHONPATH=src
+uvicorn api.app:app --reload --port 8000
+```
+
+Or put the same four values in `.env`. Then: `python scripts\ingest_samples.py` and `python scripts\run_evals.py`. Compare `score` to mock.
+
+### Wire AKS (api Deployment only)
+
+```powershell
+kubectl set env deployment/acrfp-api `
+  LLM_PROVIDER=azure_foundry `
+  AZURE_FOUNDRY_ENDPOINT=https://YOUR-RESOURCE.cognitiveservices.azure.com `
+  AZURE_FOUNDRY_API_KEY=YOUR_KEY `
+  AZURE_FOUNDRY_DEPLOYMENT=claude-sonnet-4-5
+```
+
+Prefer a Kubernetes Secret / Key Vault later. Guardrail and executor do **not** need Foundry keys.
+
+If endpoint/key missing or the call fails, `chat_json()` returns `None` and agents fall back to rules.
 
 ---
 

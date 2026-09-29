@@ -211,11 +211,18 @@
           </tr>
           <tr>
             <td>Azure AI Foundry LLM</td>
-            <td>Config ready; switch <code>LLM_PROVIDER=azure_foundry</code></td>
-            <td class="status-warn">Next</td>
+            <td>Deploy model in Foundry → set <code>LLM_PROVIDER=azure_foundry</code> + <code>AZURE_FOUNDRY_*</code> on API only → re-run evals. Not Agent Service.</td>
+            <td class="status-warn">Next (code ready)</td>
           </tr>
         </tbody>
       </table>
+
+      <div class="say">
+        <strong>Foundry wiring (say this):</strong>
+        We do not upload the app into Foundry. We deploy Claude/GPT in-region, point <code>src/agents/llm.py</code> at the model endpoint
+        (<code>…/openai/v1</code>), keep LangGraph + <code>policy.py</code> as the control plane, then compare golden-eval score to mock.
+        Full steps are in the repo README and <code>docs/project-journey-runbook.md</code> Phase 3.
+      </div>
 
       <h3>Screenshot — Health</h3>
       <div class="shot" id="shot-health">
