@@ -331,7 +331,7 @@ cd /d c:\Users\Administrator\OneDrive\Desktop\salman_genai\Multi_agents
 copy .env.example .env
 ```
 
-Edit `.env`:
+Edit `.env` (base URL only — do **not** put `/openai/v1` in the endpoint; `llm.py` appends it):
 
 ```bat
 LLM_PROVIDER=azure_foundry
@@ -339,6 +339,8 @@ AZURE_FOUNDRY_ENDPOINT=https://YOUR-RESOURCE.cognitiveservices.azure.com
 AZURE_FOUNDRY_API_KEY=YOUR_KEY
 AZURE_FOUNDRY_DEPLOYMENT=claude-sonnet-4-5
 ```
+
+Portal endpoints may also look like `*.services.ai.azure.com`. Use whatever Foundry shows as the resource endpoint; keep it without a trailing `/openai/v1`.
 
 Then:
 
@@ -390,16 +392,19 @@ kubectl set env deployment/acrfp-api `
 
 ## Production path (Azure)
 
-Week-by-week target:
+Where we are vs next:
 
-1. **Now** — local graph + guardrail + dry-run executor (this repo)
-2. **AKS via Terraform** (`infra/terraform`) — `.\scripts\terraform_apply.ps1`
-3. Wire Event Hubs / Service Bus → ingest API
-4. Azure AI Search over runbooks for diagnosis RAG
-5. Cost Management + Consumption APIs for cost agent
-6. Key Vault secrets + App Insights / GenAI tracing
-7. Live executor with RBAC-scoped ServiceAccount (still behind guardrail)
-8. GitHub Actions → AKS + demo video / architecture write-up
+1. **Done** — local graph + guardrail + dry-run executor; golden evals; ops summary
+2. **Done** — AKS via Terraform + app deploy + Ingress/TLS for `api.acrfp.site` (cluster may be **stopped** for cost; restart with `az aks start`)
+3. **Next** — wire **Azure AI Foundry** (`LLM_PROVIDER=azure_foundry`; code ready in `llm.py`)
+4. Wire Event Hubs / Service Bus → ingest API
+5. Azure AI Search over runbooks for diagnosis RAG
+6. Cost Management + Consumption APIs for cost agent
+7. Key Vault secrets + App Insights / GenAI tracing (Langfuse optional)
+8. Live executor with RBAC-scoped ServiceAccount (still behind guardrail)
+9. Demo video / CV bullets
+
+Foundry wiring steps: see *Azure AI Foundry* above (deploy the **model**, point the API — do not upload the app into Foundry).
 
 ## AKS platform (Ingress + TLS + Argo CD)
 
@@ -552,21 +557,23 @@ Do not treat those two files as generated magic. Interviewers will probe them.
 
 ## What is done vs pending
 
-### Done (Week 1 + Phase A + Week 3 infra)
+### Done
 - Local multi-agent platform (LangGraph + 3 specialists + executor dry-run)
 - Guardrail policy engine + HTTP proxy + `/ui` approval console
 - Ops summary API + incident status/type filters on `/ui` (`feature/ops-summary`)
-- Sample events, tests, Docker Compose, K8s manifests, CI
+- Sample events, tests, Docker Compose, K8s manifests, CI, golden evals
 - Audit trail, YAML policy packs, dual approval, region lock, webhook notify
-- **Terraform modules** for RG + AKS (`centralindia` cluster live)
-- Architecture doc + images (`docs/architecture.md`)
-- Helm chart, Ingress/TLS manifests, platform install script (`install_aks_platform.ps1`)
+- **Terraform** RG + AKS (`centralindia`); app image in ACR; pods on AKS
+- **Ingress + TLS** for `https://api.acrfp.site` (nginx + cert-manager; cluster often **stopped** when idle)
+- Architecture / SharePoint / interview-evidence docs; Foundry **wiring documented** (`llm.py` + env switch)
 
 ### Pending (next)
-- **Deploy app to AKS** (`.\scripts\week3_aks_deploy.ps1`) then ingress or port-forward test
-- **DNS A-record** for your domain → nginx LoadBalancer IP
-- Later: Azure Foundry, Event Hubs, Cost APIs, AI Search, live executor
+- **Live Foundry LLM** — deploy model in Azure AI Foundry, set `AZURE_FOUNDRY_*` on the API, re-run evals (see Foundry section above)
+- Event Hubs / Service Bus, Azure AI Search, Cost Management APIs
+- Key Vault + managed identity for secrets; App Insights / Langfuse traces
+- Live executor behind guardrail + scoped RBAC ServiceAccount
 - Demo video + CV bullets
+- Persist `CASES` / `APPROVALS` (Cosmos/Postgres) before multi-replica API
 
 ## New enterprise endpoints
 

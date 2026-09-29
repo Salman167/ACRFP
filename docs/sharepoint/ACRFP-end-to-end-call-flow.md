@@ -113,7 +113,7 @@ Dry-run. Cluster is not changed.
 |------|----------------------|
 | `src/agents/diagnosis.py` | Yes, if diagnosis ran |
 | `src/agents/cost.py` | Yes, if cost/mixed |
-| `src/agents/remediation.py` | Yes (always after specialists) |
+| `src/agents/remediation.py` | Always calls `chat_json()`; mock/fail → rule proposals |
 | `src/api/app.py` | No |
 | `src/orchestrator/graph.py` | No (it only calls the three agents) |
 | `src/guardrail/policy.py` | **Never** |

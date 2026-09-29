@@ -60,7 +60,7 @@ az aks stop -g acrfp-rg -n acrfp-aks
 2. **Health + Swagger screenshots** — real public HTTPS deploy.  
 3. **Approval UI screenshot** — human-in-the-loop.  
 4. **JSON dumps** — incidents + audit prove the pipeline ran.  
-5. **Honest scope** — Foundry / live executor are next (don’t overclaim).
+5. **Honest scope** — live Foundry LLM and live executor are next (code/docs ready; default is still `mock` + dry-run). Don’t overclaim.
 
 ---
 

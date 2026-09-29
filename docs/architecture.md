@@ -37,7 +37,7 @@ Start: `POST /v1/incidents/ingest` (Swagger, curl, or `scripts/ingest_samples.py
 | 3 | `graph.py` | `triage_node()` | No — `event_type` only |
 | 4 | `src/agents/diagnosis.py` | `diagnose()` | **Yes** — `chat_json()` if routed |
 | 5 | `src/agents/cost.py` | `analyze_cost()` | **Yes** — only if cost/mixed |
-| 6 | `src/agents/remediation.py` | `propose_actions()` | **Yes** — then typed `ActionProposal` |
+| 6 | `src/agents/remediation.py` | `propose_actions()` | Always calls `chat_json()`; mock/fail → rules |
 | 7 | `src/guardrail/policy.py` | `decide()` | **Never** |
 | 8 | `src/executor/app.py` | `execute()` | **Never** — only if ALLOW |
 | 9 | `src/api/app.py` | `_case_from_graph()` + audit | No |

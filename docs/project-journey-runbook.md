@@ -21,7 +21,7 @@ Alert → API → Agents → Guardrail → Executor (or /ui approval) → Audit
 |-------|------|--------|
 | 1 Local | Run API + guardrail + executor on PC (`mock` LLM) | Done |
 | 2 AKS | Same app on Azure Kubernetes + public HTTPS | Done |
-| 3 Foundry | Real LLM via Azure AI Foundry | Pending |
+| 3 Foundry | Real LLM via Azure AI Foundry | Code ready (`llm.py`); **not live-wired** (still `mock` by default) |
 
 ---
 

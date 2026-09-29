@@ -251,16 +251,19 @@ docker compose up --build
 - **Ingress + TLS** configured for `api.acrfp.site` (cert pending until GoDaddy DNS)
 
 ### Pending (next)
-- **GoDaddy DNS** — A record `api` → `20.207.74.242` (required for HTTPS cert)
-- Switch issuer from `letsencrypt-staging` → `letsencrypt-prod` after DNS works
+- **Wire Azure AI Foundry** — code ready; set `LLM_PROVIDER=azure_foundry` + `AZURE_FOUNDRY_*` (see README). Still default `mock`.
 - Real Azure wiring:
   - Event Hubs / Service Bus
   - Azure AI Search (RAG)
   - Cost Management APIs
-  - Microsoft Foundry LLM
   - Key Vault + Monitor
   - Live executor (still behind guardrail)
 - Demo video + CV bullets
+- Persist in-memory cases/approvals before scaling API replicas
+
+### Done (platform — also see journey runbook)
+- **App on AKS** + Ingress/TLS for `api.acrfp.site` (AKS may be stopped for cost)
+- GoDaddy DNS + Let's Encrypt path documented; capture pack under `docs/interview-evidence/`
 
 ---
 
