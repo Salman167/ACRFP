@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: acrfp-guardrail
+  labels:
+    app: acrfp-guardrail
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: acrfp-guardrail
+  template:
+    metadata:
+      labels:
+        app: acrfp-guardrail
+    spec:
+      containers:
+        - name: guardrail
+          image: acrfp/api:dev
+          command: ["python3", "-m", "uvicorn", "guardrail.app:app", "--host", "0.0.0.0", "--port", "8001"]
+          ports:
+            - containerPort: 8001
+          env:
+            - name: PYTHONPATH
+              value: /usr/local/lib/python3.11/site-packages:/app/src
+            - name: DENY_CRITICAL_BY_DEFAULT
+              value: "true"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: acrfp-guardrail
+spec:
+  selector:
+    app: acrfp-guardrail
+  ports:
+    - port: 8001
+      targetPort: 8001

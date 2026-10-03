@@ -1,0 +1,2 @@
+﻿NAMESPACE   NAME            READY   SECRET          AGE
+default     acrfp-api-tls   True    acrfp-api-tls   23m

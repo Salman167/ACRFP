@@ -1,0 +1,55 @@
+image:
+  repository: acrfp/api
+  tag: dev
+  pullPolicy: IfNotPresent
+
+mode: local
+llmProvider: mock
+
+service:
+  api:
+    type: ClusterIP
+    port: 80
+    targetPort: 8000
+  guardrail:
+    type: ClusterIP
+    port: 8001
+    targetPort: 8001
+  executor:
+    type: ClusterIP
+    port: 8002
+    targetPort: 8002
+
+ingress:
+  enabled: false
+  className: nginx
+  host: api.yourdomain.com
+  path: /
+  pathType: Prefix
+  clusterIssuer: letsencrypt-prod
+  sslRedirect: "true"
+  proxyBodySize: 10m
+  annotations: {}
+  tls:
+    enabled: true
+    secretName: acrfp-api-tls
+
+guardrail:
+  denyCriticalByDefault: true
+
+api:
+  replicas: 1
+
+guardrailService:
+  replicas: 2
+
+executor:
+  replicas: 1
+
+# Audit / runtime data under /app/data/runtime (Distroless non-root needs writable mount)
+persistence:
+  enabled: true
+  size: 1Gi
+  accessMode: ReadWriteOnce
+  # AKS default disk CSI; omit to use cluster default StorageClass
+  storageClass: managed-csi

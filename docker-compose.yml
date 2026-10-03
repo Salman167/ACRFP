@@ -1,0 +1,48 @@
+services:
+  api:
+    build: .
+    command: uvicorn api.app:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      PYTHONPATH: /app/src
+      GUARDRAIL_URL: http://guardrail:8001
+      EXECUTOR_URL: http://executor:8002
+      LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+      ACRFP_MODE: ${ACRFP_MODE:-local}
+    volumes:
+      - ./src:/app/src
+      - ./data:/app/data
+    depends_on:
+      - guardrail
+      - executor
+
+  guardrail:
+    build: .
+    command: uvicorn guardrail.app:app --host 0.0.0.0 --port 8001
+    ports:
+      - "8001:8001"
+    env_file:
+      - .env
+    environment:
+      PYTHONPATH: /app/src
+      AUTO_EXECUTE_LOW_RISK: ${AUTO_EXECUTE_LOW_RISK:-true}
+      REQUIRE_HUMAN_FOR_MEDIUM: ${REQUIRE_HUMAN_FOR_MEDIUM:-true}
+      DENY_CRITICAL_BY_DEFAULT: ${DENY_CRITICAL_BY_DEFAULT:-true}
+    volumes:
+      - ./src:/app/src
+
+  executor:
+    build: .
+    command: uvicorn executor.app:app --host 0.0.0.0 --port 8002
+    ports:
+      - "8002:8002"
+    env_file:
+      - .env
+    environment:
+      PYTHONPATH: /app/src
+      ACRFP_MODE: ${ACRFP_MODE:-local}
+    volumes:
+      - ./src:/app/src

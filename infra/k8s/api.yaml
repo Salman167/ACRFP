@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: acrfp-api
+  labels:
+    app: acrfp-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: acrfp-api
+  template:
+    metadata:
+      labels:
+        app: acrfp-api
+    spec:
+      containers:
+        - name: api
+          image: acrfp/api:dev
+          ports:
+            - containerPort: 8000
+          env:
+            - name: PYTHONPATH
+              value: /usr/local/lib/python3.11/site-packages:/app/src
+            - name: GUARDRAIL_URL
+              value: http://acrfp-guardrail:8001
+            - name: EXECUTOR_URL
+              value: http://acrfp-executor:8002
+            - name: LLM_PROVIDER
+              value: mock
+            - name: ACRFP_MODE
+              value: azure
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: acrfp-api
+spec:
+  # Public access via Ingress (infra/k8s/ingress/api-ingress.yaml). Use LoadBalancer only for quick tests.
+  type: ClusterIP
+  selector:
+    app: acrfp-api
+  ports:
+    - port: 80
+      targetPort: 8000
