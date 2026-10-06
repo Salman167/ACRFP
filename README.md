@@ -18,7 +18,7 @@ It is called a *platform* in the title because that job is split into reusable s
 
 ## Architecture
 
-Full notes: [`docs/architecture.md`](docs/architecture.md)
+Full notes (AI + DevOps mermaid diagrams, Foundry, **Qdrant RAG roadmap**): [`docs/architecture.md`](docs/architecture.md)
 
 ![ACRFP architecture](docs/images/acrfp-architecture.png)
 

@@ -148,3 +148,165 @@ Wire steps and env vars: root [`README.md`](../README.md) (*Azure AI Foundry*) a
 |-------|------|
 | Full platform | `docs/images/acrfp-architecture.png` |
 | Frontend vs Backend | `docs/images/acrfp-frontend-backend.png` |
+
+---
+
+## Full architecture — AI + DevOps (diagrams)
+
+### Product + AI + Azure edge
+
+```mermaid
+flowchart TB
+  subgraph Users["People / systems"]
+    OnCall["On-call / FinOps"]
+    AlertSrc["Alerts / Event Hubs later"]
+  end
+
+  subgraph Edge["DevOps edge — Azure AKS"]
+    DNS["DNS api.acrfp.site"]
+    NGINX["nginx Ingress + TLS<br/>cert-manager / Let's Encrypt"]
+  end
+
+  subgraph App["ACRFP control plane"]
+    API["acrfp-api<br/>FastAPI + LangGraph + /ui"]
+    GR["acrfp-guardrail<br/>policy.py + YAML"]
+    EX["acrfp-executor<br/>dry-run kubectl/az"]
+  end
+
+  subgraph AI["AI layer — optional"]
+    LLM["src/agents/llm.py chat_json()"]
+    Foundry["Azure AI Foundry /openai/v1"]
+    Mock["mock / rules fallback"]
+  end
+
+  subgraph Data["Config and evidence"]
+    Policies["data/policies/*.yaml"]
+    Runbooks["data/runbooks/*.md"]
+    Evals["data/evals/golden_cases.yaml"]
+    Audit["audit JSONL"]
+  end
+
+  AlertSrc --> API
+  OnCall -->|"/ui approve"| API
+  OnCall --> DNS
+  DNS --> NGINX --> API
+  API --> GR
+  API --> EX
+  API --> LLM
+  LLM --> Foundry
+  LLM --> Mock
+  GR --> Policies
+  API --> Runbooks
+  API --> Evals
+  API --> Audit
+```
+
+### AI path inside one incident
+
+```mermaid
+flowchart LR
+  A["api ingest"] --> T["triage no AI"]
+  T --> D["diagnosis.py"]
+  T --> C["cost.py"]
+  D --> L["llm.py"]
+  C --> L
+  D --> R["remediation.py"]
+  C --> R
+  R --> L
+  R --> G["guardrail policy"]
+  G -->|ALLOW| E["executor dry-run"]
+  G -->|APPROVAL| H["/ui"]
+  G -->|DENY| X["audit only"]
+```
+
+### DevOps / Azure supply chain
+
+```mermaid
+flowchart TB
+  TF["Terraform RG + AKS"] --> AKS["AKS cluster"]
+  Git["GitHub"] --> GHA["CI pytest mock"]
+  Git --> ACR["ACR image"]
+  ACR --> API2["acrfp-api"]
+  ACR --> GR2["guardrail"]
+  ACR --> EX2["executor"]
+  Helm["Helm / Argo CD"] --> API2
+  ING["nginx Ingress"] --> API2
+  CM["cert-manager"] --> ING
+  TF --> AKS
+  AKS --> ING
+  AKS --> API2
+```
+
+### Tech cheat sheet
+
+| Concern | Technology | In this repo |
+|---------|------------|--------------|
+| Orchestration | LangGraph | `src/orchestrator/graph.py` |
+| Models | LangChain + mock / OpenAI / Anthropic / Foundry | `src/agents/llm.py` |
+| Safety | Policy-as-code guardrails | `guardrail/policy.py` + YAML |
+| Execution | Dry-run executor | `src/executor/app.py` |
+| Humans | Approval UI | `GET /ui` |
+| Quality | Golden evals | `src/evals/` |
+| Hosting | Terraform, AKS, Helm, Ingress, Argo CD, GHA | `infra/` + `.github/` |
+| Vector RAG | **Not wired** — keyword runbooks today; Qdrant or Azure AI Search later | see below |
+
+---
+
+## Qdrant — what it is (and how it would fit ACRFP)
+
+**Qdrant is not in this repo today.** Diagnosis uses **keyword match** over `data/runbooks/*.md`. Qdrant (or Azure AI Search) is the natural next step when runbooks grow.
+
+### What Qdrant is
+
+**Qdrant** is an open-source **vector database**. You store embeddings (number arrays) of text chunks. At query time you embed the incident title/description and retrieve the nearest runbook passages by similarity — even when the wording differs (“pods keep dying” ≈ “CrashLoopBackOff”).
+
+| Term | Meaning |
+|------|---------|
+| Embedding | Vector from an embedding model (OpenAI / Foundry / local) |
+| Collection | Table of vectors + payload (runbook id, text, tags) |
+| Similarity search | Top-K chunks closest to the query vector |
+| Hybrid search | Vectors + keyword filters (namespace, severity) |
+
+It is **retrieval**, not the orchestrator and not the guardrail. It does not decide allow/deny.
+
+### Today vs with Qdrant
+
+```text
+TODAY
+  incident text → keyword match runbooks/*.md → diagnosis (+ optional LLM)
+
+WITH QDRANT (planned pattern)
+  ingest runbooks → chunk → embed → upsert into Qdrant
+  incident text → embed → Qdrant top-K → pass chunks into diagnosis prompt → LLM JSON
+  → remediation → guardrail (unchanged) → executor
+```
+
+```mermaid
+flowchart LR
+  RB["runbooks MD"] --> CH["chunk + embed"]
+  CH --> QD["Qdrant collection"]
+  INC["incident"] --> EMB["embed query"]
+  EMB --> QD
+  QD --> CTX["top-K passages"]
+  CTX --> DIAG["diagnosis.py + llm.py"]
+  DIAG --> REM["remediation"]
+  REM --> POL["guardrail — unchanged"]
+```
+
+### How you would integrate it (interview / roadmap)
+
+1. Run Qdrant (Docker locally, or Helm on AKS).
+2. Offline job: chunk `data/runbooks/`, call an embedding API, `upsert` into a collection (e.g. `acrfp_runbooks`).
+3. In `diagnosis.py`, replace/extend `_keyword_match` with: embed event text → `client.search(...)` → top 3–5 passages in the prompt to `chat_json()`.
+4. Keep **guardrail and executor untouched**.
+5. Alternative on Azure-only stacks: **Azure AI Search** instead of Qdrant (same RAG role; better fit for Foundry + private networking). This repo’s roadmap mentions AI Search; Qdrant is the portable open-source equivalent (also used in other portfolio RAG work).
+
+### When you need it vs not
+
+| Situation | Use |
+|-----------|-----|
+| Few markdown runbooks, clear titles | Keyword match (current) is enough |
+| Dozens/hundreds of runbooks, synonyms, multi-language | Qdrant or Azure AI Search |
+| Safety / kubectl | Never — still `policy.py` |
+
+**Interview line:** *Qdrant would be our vector store for runbook RAG. Today we keyword-match a small corpus. Scaling retrieval does not change LangGraph or the guardrail — only how diagnosis gathers context before `llm.py`.*
