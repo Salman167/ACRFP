@@ -98,6 +98,37 @@ Human approval (`POST /v1/approvals/{id}/decide`) does **not** re-run the graph.
 
 Read in this order for interviews: `models.py` → `graph.py` → `diagnosis.py` / `cost.py` / `remediation.py` → `llm.py` → `policy.py` → `executor/app.py` → `api/app.py`.
 
+### When triage, cost, and remediation run
+
+These three are not optional “extra agents.” Triage always runs. Remediation always runs after the specialists. Cost runs only when the alert is about money or is mixed.
+
+| Node | File | When it runs | What it owns | Calls the model? |
+|------|------|----------------|--------------|------------------|
+| **Triage** | `graph.py` `triage_node()` | Every ingest, first | Reads `event_type` and writes `route_plan`. No proposal, no kubectl | Never |
+| **Diagnosis** | `agents/diagnosis.py` | `reliability` or `mixed` | Root-cause hypotheses + runbook hits | Optional (`chat_json` or rules) |
+| **Cost** | `agents/cost.py` `analyze_cost()` | `cost` or `mixed` | Spend vs baseline, idle flag, monthly impact | Optional (`chat_json` or rules) |
+| **Remediation** | `agents/remediation.py` `propose_actions()` | Always, after the specialists above | Typed `ActionProposal` list only | Optional; rules if the model returns nothing valid |
+
+Routing from triage (`route_after_triage` / `route_after_diagnosis`):
+
+| `event_type` | Path |
+|--------------|------|
+| `reliability` | triage → diagnosis → **remediation** → guardrail |
+| `cost` | triage → **cost** → **remediation** → guardrail |
+| `mixed` | triage → diagnosis → **cost** → **remediation** → guardrail |
+
+Why they are split:
+
+1. **Triage stays code.** A model must not decide which specialist runs. That keeps routing cheap and testable.
+2. **Cost is a specialist, not a side effect of diagnosis.** A reliability crash does not invent a FinOps finding. An idle VM does not pretend to be a crash loop.
+3. **Remediation is the only step that may emit an action.** Diagnosis and cost write findings. Remediation turns those findings into `restart_pod`, `scale_deployment`, `stop_idle_resource`, or `apply_hpa`. Guardrail then allows, parks, or denies that action.
+
+Examples:
+
+- Payments restart storm (`reliability`) — diagnosis + remediation. Cost is skipped. Typical proposal: `restart_pod` → often ALLOW.
+- Idle VM (`cost`) — cost + remediation. Diagnosis is skipped. Typical proposal: `stop_idle_resource` → REQUIRE_APPROVAL.
+- Latency plus spend spike (`mixed`) — diagnosis, then cost, then one remediation step that can see both findings.
+
 Shareable walkthrough (upload to SharePoint / send to interviewers): [`docs/sharepoint/ACRFP-end-to-end-call-flow.md`](docs/sharepoint/ACRFP-end-to-end-call-flow.md). Same story: [`docs/architecture.md`](docs/architecture.md), [`docs/interview-evidence/`](docs/interview-evidence/).
 
 ### From-scratch: one ingest (who calls `llm.py`)
