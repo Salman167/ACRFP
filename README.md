@@ -149,10 +149,11 @@ Evals      →  replay golden incidents, score the graph + policy
 | `openai` | `gpt-4o-mini` via LangChain `ChatOpenAI` | Public OpenAI key |
 | `anthropic` | `claude-sonnet-4-5` via `ChatAnthropic` | Anthropic key |
 | `azure_foundry` | Deployment name (default `claude-sonnet-4-5`) on Foundry `/openai/v1` | Azure-hosted model |
+| `bedrock` (not in `llm.py` yet) | Amazon Bedrock Converse / `InvokeModel` | AWS-hosted model; same role as Foundry |
 
 `chat_json()` returns parsed JSON, or `None` if mock / missing key / error. Specialists then use rule fallbacks. Switching providers does not change LangGraph or `policy.py`.
 
-**Interview line:** we did not use a LangChain tool-calling agent with kubectl. We did not use Foundry Agent Service as the orchestrator. LangGraph is the playbook; the model only fills typed JSON.
+**Interview line:** we did not use a LangChain tool-calling agent with kubectl. We did not use Foundry Agent Service or Bedrock Agents as the orchestrator. LangGraph is the playbook; the model only fills typed JSON.
 
 ### Evals (how we score the stack)
 
@@ -282,6 +283,7 @@ Set in `.env`:
 | `openai` | Needs `OPENAI_API_KEY` |
 | `anthropic` | Needs `ANTHROPIC_API_KEY` |
 | `azure_foundry` | Claude/OpenAI via Foundry **model endpoint** (`AZURE_FOUNDRY_*`) |
+| `bedrock` (planned) | Same job as Foundry, via Amazon Bedrock. **Not implemented** in `llm.py` yet. See below. |
 
 ### Azure AI Foundry
 
@@ -389,6 +391,56 @@ kubectl set env deployment/acrfp-api `
 - “We call the Foundry **model endpoint**, not Agent Service, so Claude + our graph stay under our policy.”
 - “Switching mock → Foundry is an env change in `llm.py`, not a rewrite of triage or `policy.py`.”
 
+### Amazon Bedrock (instead of Foundry)
+
+Bedrock can **replace Foundry as the model host**. It does not replace LangGraph, `policy.py`, or the executor.
+
+| | Azure AI Foundry (this repo today) | Amazon Bedrock (swap-in) |
+|--|------------------------------------|---------------------------|
+| Job | Host Claude/GPT and return chat JSON | Same |
+| Code path | `LLM_PROVIDER=azure_foundry` in `src/agents/llm.py` | **Not coded yet** — add `LLM_PROVIDER=bedrock` in that same function |
+| Auth | Endpoint + API key (`AZURE_FOUNDRY_*`) | IAM role (IRSA on EKS, or instance role). No Foundry key |
+| API | OpenAI-compatible `{endpoint}/openai/v1` | Converse or `InvokeModel` via `boto3` |
+| What not to use | Foundry Agent Service | **Bedrock Agents** (would hide our graph and approval) |
+| Text filters | Azure content safety (optional, not wired) | **Bedrock Guardrails** filter toxic text and PII. They do **not** allow/deny `kubectl` |
+| Infra safety | `policy.py` + YAML | **Unchanged** |
+
+```
+Amazon Bedrock (model id in an allow-listed region)
+        ↓  Converse / InvokeModel
+src/agents/llm.py  chat_json()     ← only file that would change
+        ↓
+diagnosis / cost / remediation JSON
+        ↓
+guardrail.policy.decide()          ← same allow / approve / deny
+        ↓
+executor dry-run or /ui
+```
+
+#### What you would add (when you implement it)
+
+1. Enable a chat model in the Bedrock console (Claude, Llama, and so on) in a region you allow (`eu-west-1`, `me-central-1`, …).
+2. Give **only the API** role `bedrock:InvokeModel` (and `bedrock:InvokeModelWithResponseStream` if you stream). Guardrail and executor roles do not get that permission.
+3. In `chat_json()`, if `LLM_PROVIDER=bedrock`, call Bedrock and parse JSON. On missing creds or API errors, return `None` so agents fall back to rules (same as Foundry).
+4. Config sketch (names only — not read by the app until `llm.py` grows a branch):
+
+```bat
+LLM_PROVIDER=bedrock
+AWS_REGION=eu-west-1
+BEDROCK_MODEL_ID=anthropic.claude-3-5-sonnet-20241022-v2:0
+```
+
+5. Re-run `python scripts\run_evals.py` and compare `score` and failed case ids to mock (and to Foundry if you have both).
+
+#### What stays on Azure even if the model is Bedrock
+
+AKS, Ingress, ACR, and the three services can stay. Only the API process needs AWS credentials to call Bedrock. Moving the cluster to EKS is a separate decision.
+
+#### Interview lines
+
+- “Bedrock and Foundry are interchangeable model phones. ACRFP is the control plane.”
+- “I would not turn on Bedrock Agents. I would add one provider branch in `llm.py`.”
+- “Bedrock Guardrails are for prompt text. `policy.py` is for infrastructure actions.”
 
 ## Production path (Azure)
 
