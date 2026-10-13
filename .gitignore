@@ -30,7 +30,9 @@ infra/terraform/terraform.tfvars
 .env.*
 !.env.example
 
-# Word/Office lock files
+# Word/Office lock files and generated resumes (local only)
 ~$*.docx
 ~$*.doc
 docs/resume/~$*
+docs/resume/*.pdf
+docs/resume/*.docx

@@ -422,56 +422,55 @@ kubectl set env deployment/acrfp-api `
 - “We call the Foundry **model endpoint**, not Agent Service, so Claude + our graph stay under our policy.”
 - “Switching mock → Foundry is an env change in `llm.py`, not a rewrite of triage or `policy.py`.”
 
-### Amazon Bedrock (instead of Foundry)
+### Foundry vs Bedrock
 
-Bedrock can **replace Foundry as the model host**. It does not replace LangGraph, `policy.py`, or the executor.
+Both are **model hosts**. ACRFP stays the control plane either way. Foundry is the provider coded in `llm.py` today. Bedrock is the same slot on AWS, not built yet.
 
-| | Azure AI Foundry (this repo today) | Amazon Bedrock (swap-in) |
-|--|------------------------------------|---------------------------|
-| Job | Host Claude/GPT and return chat JSON | Same |
-| Code path | `LLM_PROVIDER=azure_foundry` in `src/agents/llm.py` | **Not coded yet** — add `LLM_PROVIDER=bedrock` in that same function |
-| Auth | Endpoint + API key (`AZURE_FOUNDRY_*`) | IAM role (IRSA on EKS, or instance role). No Foundry key |
-| API | OpenAI-compatible `{endpoint}/openai/v1` | Converse or `InvokeModel` via `boto3` |
-| What not to use | Foundry Agent Service | **Bedrock Agents** (would hide our graph and approval) |
-| Text filters | Azure content safety (optional, not wired) | **Bedrock Guardrails** filter toxic text and PII. They do **not** allow/deny `kubectl` |
-| Infra safety | `policy.py` + YAML | **Unchanged** |
+| | Azure AI Foundry | Amazon Bedrock |
+|--|------------------|----------------|
+| What you deploy | A **model** (Claude, GPT, …) in an Azure region | A **model** (Claude, Llama, Titan, …) in an AWS region |
+| What you do **not** deploy | The ACRFP app, and not Foundry Agent Service | The ACRFP app, and not Bedrock Agents |
+| How ACRFP calls it | `LLM_PROVIDER=azure_foundry` → `{endpoint}/openai/v1` | Planned: `LLM_PROVIDER=bedrock` → Converse or `InvokeModel` |
+| Status in this repo | Code ready in `src/agents/llm.py` | Documented only. `chat_json()` has no Bedrock branch yet |
+| Auth | API key or later managed identity + Key Vault | IAM role only (`bedrock:InvokeModel` on the API role) |
+| Region story | `westeurope`, `uaenorth`, and the YAML allow-list | `eu-west-1`, `me-central-1`, and the same allow-list idea |
+| RAG add-on | Azure AI Search (planned for runbooks) | Bedrock Knowledge Bases (same job, AWS-side) |
+| Text safety add-on | Azure content safety (not wired) | Bedrock Guardrails (toxic text / PII). Not a substitute for `policy.py` |
+| Infra safety | `policy.py` allow / approve / deny | **Same** `policy.py` |
+| After a switch | Re-run golden evals and compare `score` | Same eval suite |
 
+Pick Foundry when the cluster and the buyer are Azure. Pick Bedrock when the buyer is AWS. Do not run both as orchestrators. One model phone, one LangGraph playbook.
+
+To add Bedrock later: enable a chat model in an allow-listed AWS region, grant `bedrock:InvokeModel` only to the API role, and branch `chat_json()` on `LLM_PROVIDER=bedrock`. On failure, return `None` so rules still run. Then re-run golden evals. AKS can stay; only the API needs AWS credentials. Moving the cluster to EKS is a separate choice.
+
+### Vector database (what it is, and where it fits)
+
+A **vector database** stores text as numbers (embeddings) so you can search by meaning, not only by exact words. “Pods keep dying” can match a runbook titled `crashloop_restarts`.
+
+| Piece | Role |
+|-------|------|
+| Embedding model | Turns a chunk of text into a vector |
+| Collection / index | The stored vectors plus metadata (runbook name, language, tags) |
+| Query | Embed the incident text, return the nearest chunks |
+| What it is not | Not the orchestrator, not the guardrail, not the executor |
+
+**Today in ACRFP:** diagnosis keyword-matches `data/runbooks/*.md`. That is enough for a handful of files. There is **no** vector database in this repo yet.
+
+**When you add one:**
+
+```text
+runbooks → chunk → embed → vector DB
+incident text → embed → top few passages → diagnosis prompt → llm.py
+        → remediation → policy.py (unchanged)
 ```
-Amazon Bedrock (model id in an allow-listed region)
-        ↓  Converse / InvokeModel
-src/agents/llm.py  chat_json()     ← only file that would change
-        ↓
-diagnosis / cost / remediation JSON
-        ↓
-guardrail.policy.decide()          ← same allow / approve / deny
-        ↓
-executor dry-run or /ui
-```
 
-#### What you would add (when you implement it)
+| Option | When |
+|--------|------|
+| **Qdrant** | Open-source vector DB. Portable. Fits a RAG service you run yourself (Docker or Helm). |
+| **Azure AI Search** | Same RAG job, native next to Foundry and AKS. |
+| **Bedrock Knowledge Bases** | Same RAG job, native next to Bedrock. Documents usually sit in S3. |
 
-1. Enable a chat model in the Bedrock console (Claude, Llama, and so on) in a region you allow (`eu-west-1`, `me-central-1`, …).
-2. Give **only the API** role `bedrock:InvokeModel` (and `bedrock:InvokeModelWithResponseStream` if you stream). Guardrail and executor roles do not get that permission.
-3. In `chat_json()`, if `LLM_PROVIDER=bedrock`, call Bedrock and parse JSON. On missing creds or API errors, return `None` so agents fall back to rules (same as Foundry).
-4. Config sketch (names only — not read by the app until `llm.py` grows a branch):
-
-```bat
-LLM_PROVIDER=bedrock
-AWS_REGION=eu-west-1
-BEDROCK_MODEL_ID=anthropic.claude-3-5-sonnet-20241022-v2:0
-```
-
-5. Re-run `python scripts\run_evals.py` and compare `score` and failed case ids to mock (and to Foundry if you have both).
-
-#### What stays on Azure even if the model is Bedrock
-
-AKS, Ingress, ACR, and the three services can stay. Only the API process needs AWS credentials to call Bedrock. Moving the cluster to EKS is a separate decision.
-
-#### Interview lines
-
-- “Bedrock and Foundry are interchangeable model phones. ACRFP is the control plane.”
-- “I would not turn on Bedrock Agents. I would add one provider branch in `llm.py`.”
-- “Bedrock Guardrails are for prompt text. `policy.py` is for infrastructure actions.”
+Keyword match, Qdrant, AI Search, and Knowledge Bases are interchangeable **retrieval** choices. Whichever you pick, only diagnosis consumes the passages. Cost, triage, remediation shape, and `decide()` stay the same.
 
 ## Production path (Azure)
 
